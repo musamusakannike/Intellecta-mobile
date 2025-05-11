@@ -52,6 +52,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth/profile" options={{ headerShown: false }} />
         <Stack.Screen name="auth/edit-profile" options={{ headerShown: false }} />
         <Stack.Screen name="course/[courseId]" options={{ headerShown: false }} />
+        <Stack.Screen name="topic/[topicId]" options={{ headerShown: false }} />
         <Stack.Screen name="premium/manage" options={{ headerShown: false }} />
         <Stack.Screen name="premium/subscribe" options={{ headerShown: false }} />
         <Stack.Screen name="premium/invoices" options={{ headerShown: false }} />

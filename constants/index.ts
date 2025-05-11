@@ -1,4 +1,4 @@
-export const API_URL = "https://intellecta-server-h5ug.onrender.com/api/v1";
+export const API_URL = "http://192.168.84.29:5000/api/v1";
 
 export const API_ROUTES = {
   AUTH: {
@@ -16,7 +16,7 @@ export const API_ROUTES = {
   },
   COURSES: {
     GET_COURSES: `${API_URL}/courses`,
-    GET_COURSE: `${API_URL}/courses/:id`,
+    GET_COURSE_BY_ID: `${API_URL}/courses`,
     CREATE_COURSE: `${API_URL}/courses`,
     UPDATE_COURSE: `${API_URL}/courses/:id`,
     DELETE_COURSE: `${API_URL}/courses/:id`,
