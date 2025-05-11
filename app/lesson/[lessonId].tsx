@@ -37,13 +37,11 @@ import Animated, {
   SlideInUp
 } from 'react-native-reanimated';
 import { API_ROUTES } from '@/constants';
-import { WebView } from 'react-native-webview';
-import MathJax from 'react-native-mathjax';
 import YoutubePlayer from 'react-native-youtube-iframe';
-import { BlurView } from 'expo-blur';
 import * as Progress from 'react-native-progress';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import ConfettiCannon from 'react-native-confetti-cannon';
+import LatexRenderer from '@/components/LatexRenderer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -448,22 +446,7 @@ export default function LessonExperience() {
             style={styles.contentContainer}
           >
             <View style={styles.latexContainer}>
-              <MathJax
-                html={`$$${content.content}$$`}
-                mathJaxOptions={{
-                  messageStyle: 'none',
-                  extensions: ['tex2jax.js'],
-                  jax: ['input/TeX', 'output/HTML-CSS'],
-                  tex2jax: {
-                    inlineMath: [['$', '$'], ['\$$', '\$$']],
-                    displayMath: [['$$', '$$'], ['\\[', '\\]']],
-                    processEscapes: true,
-                  },
-                  TeX: {
-                    extensions: ['AMSmath.js', 'AMSsymbols.js', 'noErrors.js', 'noUndefined.js']
-                  }
-                }}
-              />
+              <LatexRenderer latex={content.content} />
             </View>
             
             {hasNote && (
