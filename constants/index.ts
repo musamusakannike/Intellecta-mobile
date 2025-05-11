@@ -24,6 +24,7 @@ export const API_ROUTES = {
   },
   LESSONS: {
     GET_LESSONS: `${API_URL}/courses/lessons`,
-    GET_LESSON_BY_ID: `${API_URL}/courses/lessons/:lessonId`,
+    GET_LESSON_BY_ID: `${API_URL}/courses/lesson`,
+    SUBMIT_QUIZ: `${API_URL}/courses/lessons`,
   },
 };
