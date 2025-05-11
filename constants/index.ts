@@ -20,5 +20,10 @@ export const API_ROUTES = {
     CREATE_COURSE: `${API_URL}/courses`,
     UPDATE_COURSE: `${API_URL}/courses/:id`,
     DELETE_COURSE: `${API_URL}/courses/:id`,
+    GET_TOPIC_BY_ID: `${API_URL}/courses/topics`,
+  },
+  LESSONS: {
+    GET_LESSONS: `${API_URL}/courses/lessons`,
+    GET_LESSON_BY_ID: `${API_URL}/courses/lessons/:lessonId`,
   },
 };
