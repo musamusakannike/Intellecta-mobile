@@ -1,29 +1,56 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { Stack, useRouter } from "expo-router";
+import AnimatedSplash from "@/components/AnimatedSplash";
+import { useState, useEffect } from "react";
+import * as SecureStore from 'expo-secure-store';
+import ToastProvider from "@/components/Toast/ToastProvider";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  const [isSplashReady, setIsSplashReady] = useState(false);
+  const [hasToken, setHasToken] = useState<boolean | null>(null); // null while checking
+  const router = useRouter();
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
+  useEffect(() => {
+    const checkAuthToken = async () => {
+      try {
+        const token = await SecureStore.getItemAsync('token');
+        setHasToken(!!token);
+      } catch (error) {
+        console.error('Error checking auth token:', error);
+        setHasToken(false);
+      }
+    };
+
+    checkAuthToken();
+  }, []);
+
+  useEffect(() => {
+    if (isSplashReady && hasToken !== null) {
+      // Navigate based on token presence
+      if (!hasToken) {
+        router.replace('/auth/login');
+      } else {
+        router.replace('/');
+      }
+    }
+  }, [isSplashReady, hasToken]);
+
+  if (!isSplashReady) {
+    return <AnimatedSplash onFinish={() => setIsSplashReady(true)} />;
+  }
+
+  // Return empty fragment while checking auth state
+  if (hasToken === null) {
     return null;
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ToastProvider>
       <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/register" options={{ headerShown: false }} />
+        <Stack.Screen name="course/[courseId]" options={{ headerShown: false }} />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    </ToastProvider>
   );
 }
