@@ -49,7 +49,16 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="auth/login" options={{ headerShown: false }} />
         <Stack.Screen name="auth/register" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/profile" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/edit-profile" options={{ headerShown: false }} />
         <Stack.Screen name="course/[courseId]" options={{ headerShown: false }} />
+        <Stack.Screen name="premium/manage" options={{ headerShown: false }} />
+        <Stack.Screen name="premium/subscribe" options={{ headerShown: false }} />
+        <Stack.Screen name="premium/invoices" options={{ headerShown: false }} />
+        <Stack.Screen name="premium/payment" options={{ headerShown: false }} />
+        <Stack.Screen name="premium/change-plan" options={{ headerShown: false }} />
+        <Stack.Screen name="(pages)/security" options={{ headerShown: false }} />
+        <Stack.Screen name="(pages)/help" options={{ headerShown: false }} />
       </Stack>
     </ToastProvider>
   );

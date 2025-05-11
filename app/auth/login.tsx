@@ -19,6 +19,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ToastContext } from "@/components/Toast/ToastContext";
 import * as SecureStore from 'expo-secure-store';
+import { API_ROUTES } from '@/constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -51,7 +53,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://192.168.84.29:5000/api/v1/auth/login', {
+      const response = await fetch(`${API_ROUTES.AUTH.LOGIN}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -63,10 +65,17 @@ export default function Login() {
       });
 
       const data = await response.json();
+      console.log(JSON.stringify(data, null, 2));
 
       if (data.status === 'success') {
         // Store the token
         await SecureStore.setItemAsync('token', data.token);
+        await AsyncStorage.setItem('username', data.user.username);
+        await AsyncStorage.setItem('fullname', data.user.fullname);
+        await AsyncStorage.setItem('email', data.user.email);
+        await AsyncStorage.setItem('profileImage', data.user.profileImage);
+        await AsyncStorage.setItem('isPremium', JSON.stringify(data.user.isPremium));
+        await AsyncStorage.setItem('joinedDate', JSON.stringify(data.user.joinedDate));
 
         toast?.showToast({
           type: 'success',
@@ -129,7 +138,7 @@ export default function Login() {
           >
             <View style={styles.header}>
               <Image
-                source={require('@/assets/images/icon.png')}
+                source={require('@/assets/images/icon.png')} 
                 style={styles.logo}
                 defaultSource={require('@/assets/images/icon.png')}
               />

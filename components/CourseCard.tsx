@@ -3,7 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 
 export const CourseCard = ({ course, onPress, style }: { course: any, onPress: any, style: any }) => {
-  console.log(JSON.stringify(course, null, 2));
+  // console.log(JSON.stringify(course, null, 2));
   return (
     <TouchableOpacity
       style={[styles.container, style]}

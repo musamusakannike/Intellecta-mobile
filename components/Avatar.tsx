@@ -1,7 +1,15 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 
-export const Avatar = ({ source, size = 40, text, style }: { source: string, size: number, text: string, style: any }) => {
+// Fix the type definition for source to properly handle require and uri objects
+interface AvatarProps {
+  source: any; // Use 'any' instead of 'string' to handle both require() and {uri: string}
+  size?: number;
+  text?: string;
+  style?: any;
+}
+
+export const Avatar = ({ source, size = 40, text = '?', style }: AvatarProps) => {
   // Colors that match the app's theme
   const colors = ['#4F78FF', '#8A53FF', '#FF5E5E', '#FF9D5C', '#4CAF50'];
   
@@ -14,21 +22,35 @@ export const Avatar = ({ source, size = 40, text, style }: { source: string, siz
   
   const backgroundColor = getColorFromText(text);
   
+  // Check if we have a valid source to render
+  const hasValidSource = () => {
+    if (!source) return false;
+    
+    // Handle both object formats: {uri: string} and required module
+    if (typeof source === 'object') {
+      // Check for required module (has default property) or uri object
+      return (source.default || (source.uri && typeof source.uri === 'string'));
+    }
+    
+    return false;
+  };
+  
   return (
     <View style={[
       styles.container, 
       { width: size, height: size, borderRadius: size / 2 },
       style
     ]}>
-      {source ? (
+      {hasValidSource() ? (
         <Image 
-          source={{ uri: source }} 
+          source={source} 
           style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]} 
+          defaultSource={require('@/assets/images/icon.png')} // Fallback
         />
       ) : (
         <View style={[styles.textContainer, { backgroundColor }]}>
           <Text style={[styles.text, { fontSize: size * 0.4 }]}>
-            {text || '?'}
+            {text}
           </Text>
         </View>
       )}

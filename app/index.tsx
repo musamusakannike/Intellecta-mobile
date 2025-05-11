@@ -20,6 +20,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Ionicons, MaterialIcons, AntDesign, FontAwesome } from '@expo/vector-icons';
 import { ToastContext } from '../components/Toast/ToastContext';
 import { BlurView } from 'expo-blur';
@@ -39,6 +40,7 @@ import Animated, {
   runOnJS,
   useAnimatedGestureHandler
 } from 'react-native-reanimated';
+import { API_ROUTES } from '@/constants';
 
 const { width } = Dimensions.get('window');
 
@@ -143,7 +145,7 @@ export default function Dashboard() {
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const token = await AsyncStorage.getItem('token');
+        const token = await SecureStore.getItemAsync('token');
         if (!token) {
           router.replace('/auth/login');
           return;
@@ -194,7 +196,7 @@ export default function Dashboard() {
       params.append('limit', '10');
 
       const token = await AsyncStorage.getItem('token');
-      const response = await fetch(`http://192.168.84.29:5000/api/v1/courses?${params.toString()}`, {
+      const response = await fetch(`${API_ROUTES.COURSES.GET_COURSES}?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -457,88 +459,6 @@ export default function Dashboard() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        {/* Animated Header */}
-        <Animated.View style={[styles.header, headerAnimatedStyle]}>
-          <View style={styles.headerTop}>
-            <View style={styles.headerInfo}>
-              <Text style={styles.greeting}>Hello,</Text>
-              <Text style={styles.username}>{username}</Text>
-            </View>
-
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  toast?.showToast({
-                    type: 'info',
-                    message: 'No new notifications',
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
-                <View style={styles.notificationBadge} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleProfilePress}
-                activeOpacity={0.7}
-              >
-                <Avatar
-                  source={profileImage || ''}
-                  size={40}
-                  text={username.charAt(0)}
-                  style={styles.avatar}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <Animated.View style={[styles.searchContainer, { opacity: searchOpacity }]}>
-            <View style={styles.searchInputContainer}>
-              <Ionicons name="search-outline" size={20} color="#8A8FA3" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search courses..."
-                placeholderTextColor="#8A8FA3"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                returnKeyType="search"
-                onSubmitEditing={() => fetchCourses(1)}
-              />
-              {searchQuery ? (
-                <TouchableOpacity
-                  style={styles.clearButton}
-                  onPress={() => {
-                    setSearchQuery('');
-                    fetchCourses(1, true);
-                  }}
-                >
-                  <Ionicons name="close-circle" size={18} color="#8A8FA3" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.filterButton, activeFilters > 0 && styles.filterButtonActive]}
-              onPress={() => setFilterModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="options-outline"
-                size={20}
-                color={activeFilters > 0 ? "#FFFFFF" : "#8A8FA3"}
-              />
-              {activeFilters > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{activeFilters}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
-        </Animated.View>
-
         {/* Main Content */}
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -554,6 +474,88 @@ export default function Dashboard() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
+          {/* Animated Header */}
+          <Animated.View style={[styles.header, headerAnimatedStyle]}>
+            <View style={styles.headerTop}>
+              <View style={styles.headerInfo}>
+                <Text style={styles.greeting}>Hello,</Text>
+                <Text style={styles.username}>{username}</Text>
+              </View>
+
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    toast?.showToast({
+                      type: 'info',
+                      message: 'No new notifications',
+                    });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
+                  <View style={styles.notificationBadge} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleProfilePress}
+                  activeOpacity={0.7}
+                >
+                  <Avatar
+                    source={profileImage || ''}
+                    size={40}
+                    text={username.charAt(0)}
+                    style={styles.avatar}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Animated.View style={[styles.searchContainer, { opacity: searchOpacity }]}>
+              <View style={styles.searchInputContainer}>
+                <Ionicons name="search-outline" size={20} color="#8A8FA3" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search courses..."
+                  placeholderTextColor="#8A8FA3"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  returnKeyType="search"
+                  onSubmitEditing={() => fetchCourses(1)}
+                />
+                {searchQuery ? (
+                  <TouchableOpacity
+                    style={styles.clearButton}
+                    onPress={() => {
+                      setSearchQuery('');
+                      fetchCourses(1, true);
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#8A8FA3" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.filterButton, activeFilters > 0 && styles.filterButtonActive]}
+                onPress={() => setFilterModalVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="options-outline"
+                  size={20}
+                  color={activeFilters > 0 ? "#FFFFFF" : "#8A8FA3"}
+                />
+                {activeFilters > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFilters}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          </Animated.View>
+
           {/* Categories */}
           <View style={styles.categoriesContainer}>
             <FlatList
@@ -651,6 +653,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 10,
     backgroundColor: '#090E23',
+    maxHeight: 140,
   },
   headerTop: {
     flexDirection: 'row',
@@ -747,13 +750,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   scrollContent: {
-    paddingTop: 190,
+    paddingTop: 150,
     paddingBottom: 20,
   },
   categoriesContainer: {
     marginBottom: 16,
   },
   categoriesList: {
+    paddingTop: 16,
     paddingHorizontal: 20,
   },
   featuredContainer: {
