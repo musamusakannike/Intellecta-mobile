@@ -3,43 +3,44 @@ import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 
 export const CourseCard = ({ course, onPress, style }: { course: any, onPress: any, style: any }) => {
+  console.log(JSON.stringify(course, null, 2));
   return (
-    <TouchableOpacity 
-      style={[styles.container, style]} 
+    <TouchableOpacity
+      style={[styles.container, style]}
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Image 
-        source={{ uri: course.imageUrl || 'https://via.placeholder.com/300' }} 
+      <Image
+        source={{ uri: course.image || 'https://via.placeholder.com/300' }}
         style={styles.image}
         resizeMode="cover"
       />
-      
+
       <View style={styles.content}>
         <View style={styles.categoryContainer}>
-          <Text style={styles.category}>{course.category}</Text>
+          <Text style={styles.category}>{course.categories[0]}</Text>
         </View>
-        
+
         <Text style={styles.title} numberOfLines={1}>
           {course.title}
         </Text>
-        
+
         <Text style={styles.instructor} numberOfLines={1}>
-          {course.instructor}
+          {course.description}
         </Text>
-        
+
         <View style={styles.footer}>
           <Text style={styles.price}>
             {course.price > 0 ? `$${course.price?.toFixed(2)}` : 'Free'}
           </Text>
-          
+
           <View style={styles.rating}>
             <FontAwesome name="star" size={14} color="#FFD700" style={styles.ratingIcon} />
-            <Text style={styles.ratingText}>{course.rating?.toFixed(1)}</Text>
+            <Text style={styles.ratingText}>{course.ratingStats.averageRating?.toFixed(1)}</Text>
           </View>
         </View>
       </View>
-      
+
       {course.isFeatured && (
         <View style={styles.featuredBadge}>
           <Ionicons name="star" size={12} color="#FFFFFF" />
