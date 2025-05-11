@@ -67,6 +67,7 @@ export default function Profile() {
         const isPremium = JSON.parse(await AsyncStorage.getItem('isPremium') || 'false');
         const joinedDate = JSON.parse(await AsyncStorage.getItem('joinedDate') || 'null');
 
+       
         setUserData({
           username: username || 'User',
           fullName: fullName || '',
@@ -287,7 +288,7 @@ export default function Profile() {
           <View style={styles.profileCard}>
             <View style={styles.avatarContainer}>
               <Avatar
-                source={userData.profileImage}
+                source={{ uri: userData.profileImage }}
                 size={100}
                 text={userData.fullName?.charAt(0) || userData.username?.charAt(0)}
                 style={{ borderRadius: 12 }}

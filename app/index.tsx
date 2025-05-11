@@ -503,7 +503,7 @@ export default function Dashboard() {
                   activeOpacity={0.7}
                 >
                   <Avatar
-                    source={profileImage || ''}
+                    source={{ uri: profileImage || '' }}
                     size={40}
                     text={username.charAt(0)}
                     style={styles.avatar}

@@ -65,7 +65,6 @@ export default function Login() {
       });
 
       const data = await response.json();
-      console.log(JSON.stringify(data, null, 2));
 
       if (data.status === 'success') {
         // Store the token

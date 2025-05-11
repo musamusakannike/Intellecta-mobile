@@ -180,6 +180,7 @@ const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
         justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     blurView: {
         position: 'absolute',
@@ -195,6 +196,7 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 24,
         paddingTop: 16,
         maxHeight: '80%',
+        zIndex: 1000,
     },
     modalHeader: {
         flexDirection: 'row',

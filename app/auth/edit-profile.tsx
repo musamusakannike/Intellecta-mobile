@@ -17,6 +17,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -148,7 +149,7 @@ export default function EditProfile() {
       setIsSaving(true);
 
       // Get token for authorization
-      const token = await AsyncStorage.getItem('token');
+      const token = await SecureStore.getItemAsync('token');
 
       // Update user data in AsyncStorage
       await AsyncStorage.setItem('username', userData.username);
@@ -174,7 +175,7 @@ export default function EditProfile() {
 
       if (data.status === 'success') {
         if (data.user && data.user.profileImage) {
-          await AsyncStorage.setItem('profileImage', data.user.profileImage);
+          await AsyncStorage.setItem('profileImage', userData.profileImage || '');
         }
 
         toast?.showToast({
