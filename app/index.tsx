@@ -1,319 +1,331 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+"use client"
+
+import React, { useState, useEffect, useContext, useCallback } from "react"
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
   RefreshControl,
   TextInput,
   FlatList,
-  ActivityIndicator,
   Dimensions,
-  Platform,
   StatusBar,
   SafeAreaView,
-  NativeSyntheticEvent,
-  NativeScrollEvent
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import { Ionicons, MaterialIcons, AntDesign, FontAwesome } from '@expo/vector-icons';
-import { ToastContext } from '../components/Toast/ToastContext';
-import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
-import { Skeleton } from "../components/Skeleton";
-import { Avatar } from "../components/Avatar";
-import { CourseCard } from "../components/CourseCard";
-import { Pagination } from "../components/Pagination";
-import { FilterModal } from "../components/FilterModal";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PanGestureHandler } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
-  useAnimatedGestureHandler
-} from 'react-native-reanimated';
-import { API_ROUTES } from '@/constants';
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
+  Platform,
+} from "react-native"
+import { LinearGradient } from "expo-linear-gradient"
+import { useRouter } from "expo-router"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import * as SecureStore from "expo-secure-store"
+import { Ionicons, AntDesign } from "@expo/vector-icons"
+import { ToastContext } from "../components/Toast/ToastContext"
+import * as Haptics from "expo-haptics"
+import { Skeleton } from "../components/Skeleton"
+import { Avatar } from "../components/Avatar"
+import { CourseCard } from "../components/CourseCard"
+import { Pagination } from "../components/Pagination"
+import { FilterModal } from "../components/FilterModal"
+import { NotificationsModal } from "../components/NotificationsModal"
+import { NotificationBadge } from "../components/NotificationBadge"
+import { useNotifications } from "../hooks/useNotifications"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from "react-native-reanimated"
+import { API_ROUTES } from "@/constants"
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window")
 
 interface Course {
-  _id: string;
-  title: string;
-  description: string;
-  price: number;
-  category: string;
-  isFeatured: boolean;
+  _id: string
+  title: string
+  description: string
+  price: number
+  category: string
+  isFeatured: boolean
 }
 
 interface FilterState {
-  minPrice: string;
-  maxPrice: string;
-  isFeatured: boolean;
-  sortBy: string;
-  sortOrder: string;
+  minPrice: string
+  maxPrice: string
+  isFeatured: boolean
+  sortBy: string
+  sortOrder: string
 }
 
 interface Category {
-  id: number;
-  name: string;
-  icon: string;
+  id: number
+  name: string
+  icon: string
 }
 
 interface FeaturedItem {
-  id: number;
-  title: string;
-  subtitle: string;
-  color1: string;
-  color2: string;
+  id: number
+  title: string
+  subtitle: string
+  color1: string
+  color2: string
 }
 
 // Categories with icons
 const categories = [
-  { id: 1, name: 'All', icon: 'grid-outline' },
-  { id: 2, name: 'Physics', icon: 'planet-outline' },
-  { id: 3, name: 'Math', icon: 'calculator-outline' },
-  { id: 4, name: 'Programming', icon: 'code-slash-outline' },
-  { id: 5, name: 'Language', icon: 'chatbubbles-outline' },
-  { id: 6, name: 'Art', icon: 'color-palette-outline' },
-  { id: 7, name: 'Business', icon: 'briefcase-outline' },
-  { id: 8, name: 'Science', icon: 'flask-outline' },
-];
+  { id: 1, name: "All", icon: "grid-outline" },
+  { id: 2, name: "Physics", icon: "planet-outline" },
+  { id: 3, name: "Math", icon: "calculator-outline" },
+  { id: 4, name: "Programming", icon: "code-slash-outline" },
+  { id: 5, name: "Language", icon: "chatbubbles-outline" },
+  { id: 6, name: "Art", icon: "color-palette-outline" },
+  { id: 7, name: "Business", icon: "briefcase-outline" },
+  { id: 8, name: "Science", icon: "flask-outline" },
+]
 
 // Featured sliders
 const featuredItems = [
   {
     id: 1,
-    title: 'Spring Sale',
-    subtitle: 'Get 50% off selected courses',
-    color1: '#4F78FF',
-    color2: '#8A53FF'
+    title: "Spring Sale",
+    subtitle: "Get 50% off selected courses",
+    color1: "#4F78FF",
+    color2: "#8A53FF",
   },
   {
     id: 2,
-    title: 'New Courses',
-    subtitle: 'Check out our latest additions',
-    color1: '#FF5E5E',
-    color2: '#FF9D5C'
+    title: "New Courses",
+    subtitle: "Check out our latest additions",
+    color1: "#FF5E5E",
+    color2: "#FF9D5C",
   },
   {
     id: 3,
-    title: 'Premium Access',
-    subtitle: 'Unlimited learning for one price',
-    color1: '#4CAF50',
-    color2: '#8BC34A'
-  }
-];
+    title: "Premium Access",
+    subtitle: "Unlimited learning for one price",
+    color1: "#4CAF50",
+    color2: "#8BC34A",
+  },
+]
 
 export default function Dashboard() {
-  const [username, setUsername] = useState('Learner');
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [username, setUsername] = useState("Learner")
+  const [profileImage, setProfileImage] = useState<string | null>(null)
+  const [courses, setCourses] = useState<Course[]>([])
+  const [filteredCourses, setFilteredCourses] = useState<Course[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 })
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("All")
+  const [filterModalVisible, setFilterModalVisible] = useState(false)
+  const [notificationsModalVisible, setNotificationsModalVisible] = useState(false)
+  const [token, setToken] = useState<string | null>(null)
   const [filters, setFilters] = useState<FilterState>({
-    minPrice: '',
-    maxPrice: '',
+    minPrice: "",
+    maxPrice: "",
     isFeatured: false,
-    sortBy: 'createdAt',
-    sortOrder: 'desc'
-  });
-  const [activeFilters, setActiveFilters] = useState(0);
+    sortBy: "createdAt",
+    sortOrder: "desc",
+  })
+  const [activeFilters, setActiveFilters] = useState(0)
 
-  const toast = useContext(ToastContext);
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const toast = useContext(ToastContext)
+  const router = useRouter()
+  const insets = useSafeAreaInsets()
+  const { unreadCount, fetchNotifications, markAllAsRead } = useNotifications()
 
   // Animated values for scrolling effects
-  const scrollY = useSharedValue(0);
-  const headerHeight = useSharedValue(180);
-  const searchOpacity = useSharedValue(1);
+  const scrollY = useSharedValue(0)
+  const headerHeight = useSharedValue(180)
+  const searchOpacity = useSharedValue(1)
 
   // Load user data
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const token = await SecureStore.getItemAsync('token');
-        if (!token) {
-          router.replace('/auth/login');
-          return;
+        const storedToken = await SecureStore.getItemAsync("token")
+        setToken(storedToken)
+
+        if (!storedToken) {
+          router.replace("/auth/login")
+          return
         }
 
-        const storedUsername = await AsyncStorage.getItem('username');
+        const storedUsername = await AsyncStorage.getItem("username")
         if (storedUsername) {
-          setUsername(storedUsername);
+          setUsername(storedUsername)
         }
 
-        const storedProfileImage = await AsyncStorage.getItem('profileImage');
+        const storedProfileImage = await AsyncStorage.getItem("profileImage")
         if (storedProfileImage) {
-          setProfileImage(storedProfileImage);
+          setProfileImage(storedProfileImage)
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
+        console.error("Error loading user data:", error)
       }
-    };
+    }
 
-    loadUserData();
-  }, []);
+    loadUserData()
+  }, [])
 
   // Fetch courses with filters
-  const fetchCourses = useCallback(async (page = 1, resetFilters = false) => {
-    try {
-      setIsLoading(true);
+  const fetchCourses = useCallback(
+    async (page = 1, resetFilters = false) => {
+      try {
+        setIsLoading(true)
 
-      const appliedFilters: FilterState = resetFilters ? {
-        minPrice: '',
-        maxPrice: '',
-        isFeatured: false,
-        sortBy: 'createdAt',
-        sortOrder: 'desc'
-      } : filters;
+        const appliedFilters: FilterState = resetFilters
+          ? {
+            minPrice: "",
+            maxPrice: "",
+            isFeatured: false,
+            sortBy: "createdAt",
+            sortOrder: "desc",
+          }
+          : filters
 
-      const category = selectedCategory !== 'All' ? selectedCategory : '';
+        const category = selectedCategory !== "All" ? selectedCategory : ""
 
-      // Construct the query string
-      const params = new URLSearchParams();
-      if (searchQuery) params.append('search', searchQuery);
-      if (category) params.append('category', category);
-      if (appliedFilters.minPrice) params.append('minPrice', appliedFilters.minPrice);
-      if (appliedFilters.maxPrice) params.append('maxPrice', appliedFilters.maxPrice);
-      if (appliedFilters.isFeatured) params.append('isFeatured', 'true');
-      if (appliedFilters.sortBy) params.append('sortBy', appliedFilters.sortBy);
-      if (appliedFilters.sortOrder) params.append('sortOrder', appliedFilters.sortOrder);
-      params.append('page', page.toString());
-      params.append('limit', '10');
+        // Construct the query string
+        const params = new URLSearchParams()
+        if (searchQuery) params.append("search", searchQuery)
+        if (category) params.append("category", category)
+        if (appliedFilters.minPrice) params.append("minPrice", appliedFilters.minPrice)
+        if (appliedFilters.maxPrice) params.append("maxPrice", appliedFilters.maxPrice)
+        if (appliedFilters.isFeatured) params.append("isFeatured", "true")
+        if (appliedFilters.sortBy) params.append("sortBy", appliedFilters.sortBy)
+        if (appliedFilters.sortOrder) params.append("sortOrder", appliedFilters.sortOrder)
+        params.append("page", page.toString())
+        params.append("limit", "10")
 
-      const token = await AsyncStorage.getItem('token');
-      const response = await fetch(`${API_ROUTES.COURSES.GET_COURSES}?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+        const storedToken = await AsyncStorage.getItem("token")
+        const response = await fetch(`${API_ROUTES.COURSES.GET_COURSES}?${params.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${storedToken}`,
+          },
+        })
+
+        const data = await response.json()
+
+        if (response.ok) {
+          setCourses(data.courses)
+          setFilteredCourses(data.courses)
+          setPagination(data.pagination)
+        } else {
+          toast?.showToast({
+            type: "error",
+            message: data.message || "Failed to fetch courses",
+          })
         }
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setCourses(data.courses);
-        setFilteredCourses(data.courses);
-        setPagination(data.pagination);
-      } else {
+      } catch (error) {
         toast?.showToast({
-          type: 'error',
-          message: data.message || 'Failed to fetch courses',
-        });
+          type: "error",
+          message: "Network error. Please check your connection.",
+        })
+        console.error("Error fetching courses:", error)
+      } finally {
+        setIsLoading(false)
+        setRefreshing(false)
       }
-    } catch (error) {
-      toast?.showToast({
-        type: 'error',
-        message: 'Network error. Please check your connection.',
-      });
-      console.error('Error fetching courses:', error);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  }, [searchQuery, selectedCategory, filters]);
+    },
+    [searchQuery, selectedCategory, filters],
+  )
 
   // Initial fetch
   useEffect(() => {
-    fetchCourses();
-  }, [fetchCourses]);
+    fetchCourses()
+  }, [fetchCourses])
 
   // Pull-to-refresh handler
   const handleRefresh = () => {
-    setRefreshing(true);
-    fetchCourses(1, true);
-  };
+    setRefreshing(true)
+    fetchCourses(1, true)
+    fetchNotifications()
+  }
 
   // Apply filters
   const applyFilters = (newFilters: FilterState) => {
-    setFilters(newFilters);
-    setFilterModalVisible(false);
+    setFilters(newFilters)
+    setFilterModalVisible(false)
 
     // Count active filters
-    let count = 0;
-    if (newFilters.minPrice) count++;
-    if (newFilters.maxPrice) count++;
-    if (newFilters.isFeatured) count++;
-    if (newFilters.sortBy !== 'createdAt' || newFilters.sortOrder !== 'desc') count++;
-    setActiveFilters(count);
+    let count = 0
+    if (newFilters.minPrice) count++
+    if (newFilters.maxPrice) count++
+    if (newFilters.isFeatured) count++
+    if (newFilters.sortBy !== "createdAt" || newFilters.sortOrder !== "desc") count++
+    setActiveFilters(count)
 
-    fetchCourses(1);
-  };
+    fetchCourses(1)
+  }
 
   // Reset filters
   const resetFilters = () => {
     const defaultFilters = {
-      minPrice: '',
-      maxPrice: '',
+      minPrice: "",
+      maxPrice: "",
       isFeatured: false,
-      sortBy: 'createdAt',
-      sortOrder: 'desc'
-    };
-    setFilters(defaultFilters);
-    setActiveFilters(0);
-    setFilterModalVisible(false);
-    fetchCourses(1, true);
-  };
+      sortBy: "createdAt",
+      sortOrder: "desc",
+    }
+    setFilters(defaultFilters)
+    setActiveFilters(0)
+    setFilterModalVisible(false)
+    fetchCourses(1, true)
+  }
 
   // Handle page change
   const handlePageChange = (page: number) => {
-    fetchCourses(page);
-  };
+    fetchCourses(page)
+  }
 
   // Header animation
   const headerAnimatedStyle = useAnimatedStyle(() => {
     return {
       height: headerHeight.value,
       opacity: searchOpacity.value,
-      zIndex: 1000,
-    };
-  });
+      zIndex: 900,
+    }
+  })
 
   // Scroll handler for animations
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const scrollPosition = event.nativeEvent.contentOffset.y;
-    scrollY.value = scrollPosition;
+    const scrollPosition = event.nativeEvent.contentOffset.y
+    scrollY.value = scrollPosition
 
     // Collapse header on scroll
     if (scrollPosition > 50) {
-      headerHeight.value = withSpring(100, { damping: 20, stiffness: 90 });
-      searchOpacity.value = withTiming(0, { duration: 200 });
+      headerHeight.value = withSpring(100, { damping: 20, stiffness: 90 })
+      searchOpacity.value = withTiming(0, { duration: 200 })
     } else {
-      headerHeight.value = withSpring(180, { damping: 20, stiffness: 90 });
-      searchOpacity.value = withTiming(1, { duration: 200 });
+      headerHeight.value = withSpring(180, { damping: 20, stiffness: 90 })
+      searchOpacity.value = withTiming(1, { duration: 200 })
     }
-  };
+  }
 
   // Navigate to course details
   const navigateToCourseDetails = (course: Course) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/course/${course._id}`);
-  };
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    router.push(`/course/${course._id}`)
+  }
 
   // Profile button press
   const handleProfilePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/auth/profile');
-  };
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    router.push("/auth/profile")
+  }
+
+  // Handle notifications button press
+  const handleNotificationsPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    setNotificationsModalVisible(true)
+    markAllAsRead()
+  }
 
   // Render category item
   const renderCategoryItem = ({ item }: { item: Category }) => {
     const styles = StyleSheet.create({
       categoryItem: {
-        alignItems: 'center',
+        alignItems: "center",
         marginRight: 16,
         minWidth: 70,
       },
@@ -321,56 +333,43 @@ export default function Dashboard() {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        justifyContent: 'center',
-        alignItems: 'center',
+        backgroundColor: "rgba(255, 255, 255, 0.08)",
+        justifyContent: "center",
+        alignItems: "center",
         marginBottom: 8,
       },
       categoryIconActive: {
-        backgroundColor: '#4F78FF',
+        backgroundColor: "#4F78FF",
       },
       categoryText: {
         fontSize: 12,
-        color: '#8A8FA3',
+        color: "#8A8FA3",
       },
       categoryTextActive: {
-        color: '#FFFFFF',
-        fontWeight: '600',
+        color: "#FFFFFF",
+        fontWeight: "600",
       },
-    });
+    })
 
     return (
       <TouchableOpacity
-        style={[
-          styles.categoryItem,
-          selectedCategory === item.name && styles.categoryIcon
-        ]}
+        style={[styles.categoryItem, selectedCategory === item.name && styles.categoryIcon]}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          setSelectedCategory(item.name);
-          fetchCourses(1);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          setSelectedCategory(item.name)
+          fetchCourses(1)
         }}
         activeOpacity={0.7}
       >
-        <View style={[
-          styles.categoryIcon,
-          selectedCategory === item.name && styles.categoryIconActive
-        ]}>
-          <Ionicons
-            name={item.icon as any}
-            size={20}
-            color={selectedCategory === item.name ? "#FFFFFF" : "#8A8FA3"}
-          />
+        <View style={[styles.categoryIcon, selectedCategory === item.name && styles.categoryIconActive]}>
+          <Ionicons name={item.icon as any} size={20} color={selectedCategory === item.name ? "#FFFFFF" : "#8A8FA3"} />
         </View>
-        <Text style={[
-          styles.categoryText,
-          selectedCategory === item.name && styles.categoryTextActive
-        ]}>
+        <Text style={[styles.categoryText, selectedCategory === item.name && styles.categoryTextActive]}>
           {item.name}
         </Text>
       </TouchableOpacity>
-    );
-  };
+    )
+  }
 
   // Render featured slider item
   const renderFeaturedItem = ({ item }: { item: FeaturedItem }) => (
@@ -378,7 +377,7 @@ export default function Dashboard() {
       style={styles.featuredItem}
       activeOpacity={0.9}
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       }}
     >
       <LinearGradient
@@ -403,16 +402,12 @@ export default function Dashboard() {
         </View>
       </LinearGradient>
     </TouchableOpacity>
-  );
+  )
 
   // Render course item
   const renderCourseItem = ({ item }: { item: Course }) => (
-    <CourseCard
-      course={item}
-      onPress={() => navigateToCourseDetails(item)}
-      style={styles.courseCard}
-    />
-  );
+    <CourseCard course={item} onPress={() => navigateToCourseDetails(item)} style={styles.courseCard} />
+  )
 
   // Empty state
   const renderEmptyState = () => (
@@ -420,15 +415,11 @@ export default function Dashboard() {
       <Ionicons name="search-outline" size={70} color="#4F78FF" style={styles.emptyIcon} />
       <Text style={styles.emptyTitle}>No courses found</Text>
       <Text style={styles.emptyText}>Try adjusting your search or filters</Text>
-      <TouchableOpacity
-        style={styles.emptyButton}
-        onPress={resetFilters}
-        activeOpacity={0.8}
-      >
+      <TouchableOpacity style={styles.emptyButton} onPress={resetFilters} activeOpacity={0.8}>
         <Text style={styles.emptyButtonText}>Reset Filters</Text>
       </TouchableOpacity>
     </View>
-  );
+  )
 
   // Loading skeleton
   const renderSkeleton = () => (
@@ -447,14 +438,14 @@ export default function Dashboard() {
         </View>
       ))}
     </>
-  );
+  )
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
       <LinearGradient
-        colors={['#090E23', '#1F2B5E', '#0C1339']}
+        colors={["#090E23", "#1F2B5E", "#0C1339"]}
         style={styles.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -483,27 +474,14 @@ export default function Dashboard() {
               </View>
 
               <View style={styles.headerActions}>
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    toast?.showToast({
-                      type: 'info',
-                      message: 'No new notifications',
-                    });
-                  }}
-                  activeOpacity={0.7}
-                >
+                <TouchableOpacity style={styles.iconButton} onPress={handleNotificationsPress} activeOpacity={0.7}>
                   <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
-                  <View style={styles.notificationBadge} />
+                  <NotificationBadge count={unreadCount} />
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={handleProfilePress}
-                  activeOpacity={0.7}
-                >
+                <TouchableOpacity onPress={handleProfilePress} activeOpacity={0.7}>
                   <Avatar
-                    source={{ uri: profileImage || '' }}
+                    source={{ uri: profileImage || "" }}
                     size={40}
                     text={username.charAt(0)}
                     style={styles.avatar}
@@ -528,8 +506,8 @@ export default function Dashboard() {
                   <TouchableOpacity
                     style={styles.clearButton}
                     onPress={() => {
-                      setSearchQuery('');
-                      fetchCourses(1, true);
+                      setSearchQuery("")
+                      fetchCourses(1, true)
                     }}
                   >
                     <Ionicons name="close-circle" size={18} color="#8A8FA3" />
@@ -542,11 +520,7 @@ export default function Dashboard() {
                 onPress={() => setFilterModalVisible(true)}
                 activeOpacity={0.7}
               >
-                <Ionicons
-                  name="options-outline"
-                  size={20}
-                  color={activeFilters > 0 ? "#FFFFFF" : "#8A8FA3"}
-                />
+                <Ionicons name="options-outline" size={20} color={activeFilters > 0 ? "#FFFFFF" : "#8A8FA3"} />
                 {activeFilters > 0 && (
                   <View style={styles.filterBadge}>
                     <Text style={styles.filterBadgeText}>{activeFilters}</Text>
@@ -561,7 +535,7 @@ export default function Dashboard() {
             <FlatList
               data={categories}
               renderItem={renderCategoryItem}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={(item) => item.id.toString()}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoriesList}
@@ -573,7 +547,7 @@ export default function Dashboard() {
             <FlatList
               data={featuredItems}
               renderItem={renderFeaturedItem}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={(item) => item.id.toString()}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.featuredList}
@@ -587,11 +561,9 @@ export default function Dashboard() {
           <View style={styles.coursesSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
-                {selectedCategory === 'All' ? 'All Courses' : `${selectedCategory} Courses`}
+                {selectedCategory === "All" ? "All Courses" : `${selectedCategory} Courses`}
               </Text>
-              {pagination && (
-                <Text style={styles.coursesCount}>{pagination.total} courses</Text>
-              )}
+              {pagination && <Text style={styles.coursesCount}>{pagination.total} courses</Text>}
             </View>
 
             {/* Courses List */}
@@ -623,6 +595,13 @@ export default function Dashboard() {
           </View>
         </ScrollView>
 
+        {/* Notifications Modal */}
+        <NotificationsModal
+          visible={notificationsModalVisible}
+          onClose={() => setNotificationsModalVisible(false)}
+          token={token}
+        />
+
         {/* Filter Modal */}
         <FilterModal
           visible={filterModalVisible}
@@ -633,32 +612,32 @@ export default function Dashboard() {
         />
       </LinearGradient>
     </SafeAreaView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090E23',
+    backgroundColor: "#090E23",
   },
   gradient: {
     flex: 1,
   },
   header: {
     paddingHorizontal: 20,
-    justifyContent: 'space-between',
-    position: 'absolute',
+    justifyContent: "space-between",
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: '#090E23',
+    backgroundColor: "#090E23",
     maxHeight: 140,
   },
   headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 10,
     marginBottom: 16,
   },
@@ -667,42 +646,33 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 14,
-    color: '#B4C6EF',
+    color: "#B4C6EF",
     marginBottom: 4,
   },
   username: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
   headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   iconButton: {
     padding: 8,
     marginRight: 16,
-    position: 'relative',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF5E5E',
+    position: "relative",
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 16,
   },
   searchInputContainer: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 50,
@@ -713,10 +683,10 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    height: '100%',
-    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
+    height: "100%",
+    fontFamily: Platform.OS === "ios" ? "Helvetica Neue" : "sans-serif",
   },
   clearButton: {
     padding: 6,
@@ -725,29 +695,29 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
   },
   filterButtonActive: {
-    backgroundColor: '#4F78FF',
+    backgroundColor: "#4F78FF",
   },
   filterBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     right: 8,
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#FF5E5E',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#FF5E5E",
+    justifyContent: "center",
+    alignItems: "center",
   },
   filterBadgeText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   scrollContent: {
     paddingTop: 150,
@@ -771,50 +741,50 @@ const styles = StyleSheet.create({
     height: 140,
     marginRight: 10,
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   featuredGradient: {
     flex: 1,
     padding: 20,
-    justifyContent: 'center',
-    overflow: 'hidden',
+    justifyContent: "center",
+    overflow: "hidden",
   },
   featuredContent: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     zIndex: 2,
   },
   featuredTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: "bold",
+    color: "#FFFFFF",
     marginBottom: 4,
   },
   featuredSubtitle: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     marginBottom: 16,
   },
   featuredButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignSelf: 'flex-start',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignSelf: "flex-start",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
   },
   featuredButtonText: {
     fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: "#FFFFFF",
+    fontWeight: "600",
     marginRight: 8,
   },
   featuredButtonIcon: {
     marginTop: 1,
   },
   featuredDeco: {
-    position: 'absolute',
+    position: "absolute",
     right: -30,
     bottom: -30,
     zIndex: 1,
@@ -823,41 +793,41 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   featuredCircle2: {
-    position: 'absolute',
+    position: "absolute",
     top: 30,
     left: 30,
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
   },
   coursesSection: {
     paddingHorizontal: 20,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
   coursesCount: {
     fontSize: 14,
-    color: '#B4C6EF',
+    color: "#B4C6EF",
   },
   courseCard: {
     marginBottom: 16,
   },
   emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 40,
   },
   emptyIcon: {
@@ -866,30 +836,30 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontWeight: "bold",
+    color: "#FFFFFF",
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
-    color: '#B4C6EF',
-    textAlign: 'center',
+    color: "#B4C6EF",
+    textAlign: "center",
     marginBottom: 20,
   },
   emptyButton: {
-    backgroundColor: '#4F78FF',
+    backgroundColor: "#4F78FF",
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
   },
   emptyButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   skeletonCard: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    flexDirection: "row",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
     marginBottom: 16,
     padding: 12,
@@ -899,46 +869,46 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
   },
   skeletonContent: {
     flex: 1,
     marginLeft: 12,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   skeletonTitle: {
     height: 20,
-    width: '80%',
+    width: "80%",
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     marginBottom: 8,
   },
   skeletonDescription: {
     height: 16,
-    width: '90%',
+    width: "90%",
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     marginBottom: 8,
   },
   skeletonFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 8,
   },
   skeletonPrice: {
     height: 18,
     width: 80,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
   },
   skeletonRating: {
     height: 18,
     width: 60,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
   },
   avatar: {
     marginLeft: 8,
   },
-});
+})
