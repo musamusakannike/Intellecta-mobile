@@ -13,13 +13,14 @@ import {
   SafeAreaView,
   Alert,
   FlatList,
-  TextInput
+  TextInput,
+  Linking
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { Ionicons, MaterialIcons, FontAwesome5, AntDesign } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, FontAwesome5, AntDesign, Feather } from '@expo/vector-icons';
 import { ToastContext } from "@/components/Toast/ToastContext";
 import * as Haptics from 'expo-haptics';
 import { Skeleton } from "@/components/Skeleton";
@@ -42,14 +43,20 @@ import * as Progress from 'react-native-progress';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import LatexRenderer from '@/components/LatexRenderer';
+import { ResizeMode, Video } from 'expo-av';
+import * as Speech from 'expo-speech';
+import CodeBlockViewer from '@/components/CodeBlockViewer';
+import CachedImage from '@/components/CachedImage';
 
 const { width, height } = Dimensions.get('window');
 
 interface LessonContent {
-  type: 'text' | 'image' | 'latex' | 'youtubeUrl';
+  type: 'text' | 'image' | 'code' | 'latex' | 'link' | 'video' | 'youtubeUrl';
   content: string;
   order: number;
   _id: string;
+  language?: string; // For code blocks
+  title?: string; // For links
 }
 
 interface QuizQuestion {
@@ -92,8 +99,10 @@ export default function LessonExperience() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [showNotes, setShowNotes] = useState(false);
-  const [savedNotes, setSavedNotes] = useState<{[key: string]: string}>({});
+  const [savedNotes, setSavedNotes] = useState<{ [key: string]: string }>({});
   const [contentProgress, setContentProgress] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const toast = useContext(ToastContext);
   const router = useRouter();
@@ -101,17 +110,19 @@ export default function LessonExperience() {
   const { lessonId } = useLocalSearchParams();
   const scrollRef = useRef<ScrollView>(null);
   const confettiRef = useRef<any>(null);
-  
+  const videoRef = useRef<Video>(null);
+
   const progressValue = useSharedValue(0);
   const quizSheetPosition = useSharedValue(height);
   const notesSheetPosition = useSharedValue(height);
+  const deleteConfirmPosition = useSharedValue(height);
 
   // Fetch lesson data
   const fetchLessonData = async () => {
     try {
       setIsLoading(true);
       const token = await SecureStore.getItemAsync('token');
-      
+
       if (!token) {
         router.replace('/auth/login');
         return;
@@ -165,6 +176,13 @@ export default function LessonExperience() {
 
   useEffect(() => {
     fetchLessonData();
+
+    // Cleanup speech on unmount
+    return () => {
+      if (isSpeaking) {
+        Speech.stop();
+      }
+    };
   }, [lessonId]);
 
   // Save progress when content index changes
@@ -172,25 +190,38 @@ export default function LessonExperience() {
     if (lesson && lesson.contents.length > 0) {
       const saveProgress = async () => {
         await AsyncStorage.setItem(`lesson_progress_${lessonId}`, currentContentIndex.toString());
-        
+
         // Update progress bar
         const newProgress = currentContentIndex / (lesson.contents.length - 1);
         setContentProgress(newProgress);
         progressValue.value = withTiming(newProgress, { duration: 300 });
       };
-      
+
       saveProgress();
     }
   }, [currentContentIndex, lesson]);
 
   const handleBackPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Stop speech if active
+    if (isSpeaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+    }
+
     router.back();
   };
 
   const navigateToContent = (index: number) => {
     if (!lesson) return;
-    
+
+    // Stop speech if active
+    if (isSpeaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+    }
+
     if (index < 0) {
       index = 0;
     } else if (index >= lesson.contents.length) {
@@ -204,13 +235,19 @@ export default function LessonExperience() {
         index = lesson.contents.length - 1;
       }
     }
-    
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCurrentContentIndex(index);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   const openQuiz = () => {
+    // Stop speech if active
+    if (isSpeaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+    }
+
     setShowQuiz(true);
     quizSheetPosition.value = withSpring(0, { damping: 20, stiffness: 90 });
   };
@@ -222,41 +259,143 @@ export default function LessonExperience() {
 
   const toggleNotes = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
+
     if (showNotes) {
       notesSheetPosition.value = withSpring(height, { damping: 20, stiffness: 90 });
       setTimeout(() => setShowNotes(false), 300);
     } else {
+      if (lesson) {
+        const contentId = lesson.contents[currentContentIndex]._id;
+        const existingNote = savedNotes[contentId] || '';
+        setNoteText(existingNote);
+      }
+
       setShowNotes(true);
       notesSheetPosition.value = withSpring(0, { damping: 20, stiffness: 90 });
     }
   };
 
   const saveNote = async () => {
-    if (!lesson || !noteText.trim()) return;
-    
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
+    if (!lesson) return;
+
     const contentId = lesson.contents[currentContentIndex]._id;
+
+    if (!noteText.trim()) {
+      // If note is empty, show delete confirmation
+      showDeleteNoteConfirmation();
+      return;
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
     const updatedNotes = {
       ...savedNotes,
       [contentId]: noteText
     };
-    
+
     setSavedNotes(updatedNotes);
     await AsyncStorage.setItem(`lesson_notes_${lessonId}`, JSON.stringify(updatedNotes));
-    
+
     toast?.showToast({
       type: 'success',
       message: 'Note saved successfully',
     });
-    
+
     toggleNotes();
+  };
+
+  const showDeleteNoteConfirmation = () => {
+    if (!lesson) return;
+
+    const contentId = lesson.contents[currentContentIndex]._id;
+
+    // Only show delete confirmation if there's an existing note
+    if (savedNotes[contentId]) {
+      setShowDeleteConfirm(true);
+      deleteConfirmPosition.value = withSpring(0, { damping: 20, stiffness: 90 });
+    } else {
+      // If there's no existing note and the input is empty, just close
+      toggleNotes();
+    }
+  };
+
+  const closeDeleteConfirmation = () => {
+    deleteConfirmPosition.value = withSpring(height, { damping: 20, stiffness: 90 });
+    setTimeout(() => setShowDeleteConfirm(false), 300);
+  };
+
+  const deleteNote = async () => {
+    if (!lesson) return;
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    const contentId = lesson.contents[currentContentIndex]._id;
+    const updatedNotes = { ...savedNotes };
+    delete updatedNotes[contentId];
+
+    setSavedNotes(updatedNotes);
+    await AsyncStorage.setItem(`lesson_notes_${lessonId}`, JSON.stringify(updatedNotes));
+
+    toast?.showToast({
+      type: 'success',
+      message: 'Note deleted successfully',
+    });
+
+    closeDeleteConfirmation();
+    toggleNotes();
+  };
+
+  const toggleSpeech = () => {
+    if (!lesson) return;
+
+    const content = lesson.contents[currentContentIndex];
+
+    if (content.type !== 'text') {
+      toast?.showToast({
+        type: 'info',
+        message: 'Text-to-speech is only available for text content',
+      });
+      return;
+    }
+
+    if (isSpeaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+
+      toast?.showToast({
+        type: 'info',
+        message: 'Speech stopped',
+      });
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      Speech.speak(content.content, {
+        language: 'en',
+        pitch: 1.0,
+        rate: 0.9,
+        onStart: () => setIsSpeaking(true),
+        onDone: () => setIsSpeaking(false),
+        onStopped: () => setIsSpeaking(false),
+        onError: () => {
+          setIsSpeaking(false);
+          toast?.showToast({
+            type: 'error',
+            message: 'Failed to start speech',
+          });
+        }
+      });
+
+
+      toast?.showToast({
+        type: 'info',
+        message: 'Playing text content',
+      });
+    }
   };
 
   const handleSelectAnswer = (questionIndex: number, answerIndex: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
+
     const newAnswers = [...quizAnswers];
     newAnswers[questionIndex] = answerIndex;
     setQuizAnswers(newAnswers);
@@ -269,7 +408,7 @@ export default function LessonExperience() {
 
   const submitQuiz = async () => {
     if (!lesson) return;
-    
+
     // Check if all questions are answered
     if (quizAnswers.includes(-1)) {
       toast?.showToast({
@@ -278,12 +417,12 @@ export default function LessonExperience() {
       });
       return;
     }
-    
+
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      
+
       const token = await SecureStore.getItemAsync('token');
-      
+
       const response = await fetch(`${API_ROUTES.LESSONS.SUBMIT_QUIZ}/${lessonId}/quiz`, {
         method: 'POST',
         headers: {
@@ -292,23 +431,23 @@ export default function LessonExperience() {
         },
         body: JSON.stringify({ answers: quizAnswers })
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to submit quiz');
       }
-      
+
       const results = await response.json();
       setQuizResults(results);
       setQuizSubmitted(true);
-      
+
       if (results.passed) {
         setTimeout(() => {
           setShowConfetti(true);
           confettiRef.current?.start();
         }, 500);
       }
-      
+
     } catch (error) {
       console.error('Error submitting quiz:', error);
       toast?.showToast({
@@ -338,6 +477,15 @@ export default function LessonExperience() {
     return (match && match[2].length === 11) ? match[2] : null;
   };
 
+  const openLink = (url: string) => {
+    Linking.openURL(url).catch(err => {
+      toast?.showToast({
+        type: 'error',
+        message: 'Could not open the link',
+      });
+    });
+  };
+
   // Animated styles
   const progressBarStyle = useAnimatedStyle(() => {
     return {
@@ -357,12 +505,18 @@ export default function LessonExperience() {
     };
   });
 
+  const deleteConfirmStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: deleteConfirmPosition.value }],
+    };
+  });
+
   // Render loading skeleton
   const renderSkeleton = () => (
     <View style={styles.skeletonContainer}>
       <Skeleton style={styles.skeletonHeader} />
       <Skeleton style={styles.skeletonSubtitle} />
-      
+
       <View style={styles.skeletonContentContainer}>
         <Skeleton style={styles.skeletonParagraph} />
         <Skeleton style={styles.skeletonImage} />
@@ -374,22 +528,22 @@ export default function LessonExperience() {
   // Render content based on type
   const renderContent = () => {
     if (!lesson || !lesson.contents[currentContentIndex]) return null;
-    
+
     const content = lesson.contents[currentContentIndex];
     const contentId = content._id;
     const hasNote = savedNotes[contentId] !== undefined;
-    
+
     switch (content.type) {
       case 'text':
         return (
-          <Animated.View 
+          <Animated.View
             entering={FadeIn.duration(300)}
             style={styles.contentContainer}
           >
             <Text style={styles.contentText}>{content.content}</Text>
-            
+
             {hasNote && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.savedNoteContainer}
                 onPress={toggleNotes}
                 activeOpacity={0.8}
@@ -403,26 +557,46 @@ export default function LessonExperience() {
                 </Text>
               </TouchableOpacity>
             )}
+
+            <TouchableOpacity
+              style={[
+                styles.textToSpeechButton,
+                isSpeaking && styles.textToSpeechButtonActive
+              ]}
+              onPress={toggleSpeech}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isSpeaking ? "volume-high" : "volume-medium"}
+                size={18}
+                color={isSpeaking ? "#FFFFFF" : "#4F78FF"}
+              />
+              <Text style={[
+                styles.textToSpeechText,
+                isSpeaking && styles.textToSpeechTextActive
+              ]}>
+                {isSpeaking ? "Stop Reading" : "Read Aloud"}
+              </Text>
+            </TouchableOpacity>
           </Animated.View>
         );
-        
+
       case 'image':
         return (
-          <Animated.View 
+          <Animated.View
             entering={FadeIn.duration(300)}
             style={styles.contentContainer}
           >
             <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: content.content }}
+              <CachedImage
+                source={content.content}
                 style={styles.contentImage}
                 resizeMode="contain"
-                defaultSource={require('@/assets/images/icon.png')}
               />
             </View>
-            
+
             {hasNote && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.savedNoteContainer}
                 onPress={toggleNotes}
                 activeOpacity={0.8}
@@ -438,19 +612,52 @@ export default function LessonExperience() {
             )}
           </Animated.View>
         );
-        
+
+      case 'code':
+        return (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            style={styles.contentContainer}
+          >
+            <View style={styles.codeContainer}>
+              <CodeBlockViewer
+                code={content.content}
+                language={content.language || 'javascript'}
+                theme="dark"
+                fontSize={34}
+              />
+            </View>
+
+            {hasNote && (
+              <TouchableOpacity
+                style={styles.savedNoteContainer}
+                onPress={toggleNotes}
+                activeOpacity={0.8}
+              >
+                <View style={styles.savedNoteHeader}>
+                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Text style={styles.savedNoteTitle}>Your Note</Text>
+                </View>
+                <Text style={styles.savedNoteText} numberOfLines={3}>
+                  {savedNotes[contentId]}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        );
+
       case 'latex':
         return (
-          <Animated.View 
+          <Animated.View
             entering={FadeIn.duration(300)}
             style={styles.contentContainer}
           >
             <View style={styles.latexContainer}>
               <LatexRenderer latex={content.content} />
             </View>
-            
+
             {hasNote && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.savedNoteContainer}
                 onPress={toggleNotes}
                 activeOpacity={0.8}
@@ -466,12 +673,90 @@ export default function LessonExperience() {
             )}
           </Animated.View>
         );
-        
+
+      case 'link':
+        return (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            style={styles.contentContainer}
+          >
+            <TouchableOpacity
+              style={styles.linkContainer}
+              onPress={() => openLink(content.content)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.linkContent}>
+                <Ionicons name="link" size={24} color="#4F78FF" style={styles.linkIcon} />
+                <View style={styles.linkTextContainer}>
+                  <Text style={styles.linkTitle}>{content.title || 'External Resource'}</Text>
+                  <Text style={styles.linkUrl} numberOfLines={1}>{content.content}</Text>
+                </View>
+              </View>
+              <Ionicons name="open-outline" size={20} color="#B4C6EF" />
+            </TouchableOpacity>
+
+            {hasNote && (
+              <TouchableOpacity
+                style={styles.savedNoteContainer}
+                onPress={toggleNotes}
+                activeOpacity={0.8}
+              >
+                <View style={styles.savedNoteHeader}>
+                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Text style={styles.savedNoteTitle}>Your Note</Text>
+                </View>
+                <Text style={styles.savedNoteText} numberOfLines={3}>
+                  {savedNotes[contentId]}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        );
+
+      case 'video':
+        return (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            style={styles.contentContainer}
+          >
+            <View style={styles.videoContainer}>
+              <Video
+                ref={videoRef}
+                source={{ uri: content.content }}
+                rate={1.0}
+                volume={1.0}
+                isMuted={false}
+                resizeMode={ResizeMode.CONTAIN}
+                shouldPlay={false}
+                isLooping={false}
+                style={styles.video}
+                useNativeControls
+              />
+            </View>
+
+            {hasNote && (
+              <TouchableOpacity
+                style={styles.savedNoteContainer}
+                onPress={toggleNotes}
+                activeOpacity={0.8}
+              >
+                <View style={styles.savedNoteHeader}>
+                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Text style={styles.savedNoteTitle}>Your Note</Text>
+                </View>
+                <Text style={styles.savedNoteText} numberOfLines={3}>
+                  {savedNotes[contentId]}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        );
+
       case 'youtubeUrl':
         const videoId = extractYoutubeId(content.content);
-        
+
         return (
-          <Animated.View 
+          <Animated.View
             entering={FadeIn.duration(300)}
             style={styles.contentContainer}
           >
@@ -482,7 +767,7 @@ export default function LessonExperience() {
                   <Text style={styles.videoLoadingText}>Loading video...</Text>
                 </View>
               )}
-              
+
               {videoId && (
                 <YoutubePlayer
                   height={220}
@@ -499,9 +784,9 @@ export default function LessonExperience() {
                 />
               )}
             </View>
-            
+
             {hasNote && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.savedNoteContainer}
                 onPress={toggleNotes}
                 activeOpacity={0.8}
@@ -517,16 +802,20 @@ export default function LessonExperience() {
             )}
           </Animated.View>
         );
-        
+
       default:
-        return null;
+        return (
+          <View style={styles.contentContainer}>
+            <Text style={styles.contentText}>Unsupported content type: {content.type}</Text>
+          </View>
+        );
     }
   };
 
   // Render quiz
   const renderQuiz = () => {
     if (!lesson || !lesson.quiz) return null;
-    
+
     return (
       <Animated.View style={[styles.quizContainer, quizSheetStyle]}>
         <LinearGradient
@@ -536,7 +825,7 @@ export default function LessonExperience() {
           end={{ x: 1, y: 1 }}
         >
           <View style={styles.quizHeader}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.quizCloseButton}
               onPress={closeQuiz}
               activeOpacity={0.7}
@@ -545,16 +834,16 @@ export default function LessonExperience() {
             </TouchableOpacity>
             <Text style={styles.quizTitle}>Knowledge Check</Text>
             <Text style={styles.quizSubtitle}>
-              {quizSubmitted 
-                ? quizResults?.passed 
-                  ? 'Congratulations! You passed the quiz.' 
+              {quizSubmitted
+                ? quizResults?.passed
+                  ? 'Congratulations! You passed the quiz.'
                   : 'You didn\'t pass. Review and try again.'
                 : 'Test your understanding of the lesson'
               }
             </Text>
           </View>
-          
-          <ScrollView 
+
+          <ScrollView
             style={styles.quizContent}
             contentContainerStyle={styles.quizContentContainer}
             showsVerticalScrollIndicator={false}
@@ -570,13 +859,13 @@ export default function LessonExperience() {
                 fallSpeed={3000}
               />
             )}
-            
+
             {lesson.quiz.map((question, qIndex) => (
               <View key={question._id} style={styles.questionContainer}>
                 <Text style={styles.questionText}>
                   {qIndex + 1}. {question.question}
                 </Text>
-                
+
                 {question.options.map((option, oIndex) => (
                   <TouchableOpacity
                     key={oIndex}
@@ -584,8 +873,8 @@ export default function LessonExperience() {
                       styles.optionContainer,
                       quizAnswers[qIndex] === oIndex && styles.optionSelected,
                       quizSubmitted && oIndex === question.correctAnswer && styles.optionCorrect,
-                      quizSubmitted && quizAnswers[qIndex] === oIndex && 
-                        oIndex !== question.correctAnswer && styles.optionWrong
+                      quizSubmitted && quizAnswers[qIndex] === oIndex &&
+                      oIndex !== question.correctAnswer && styles.optionWrong
                     ]}
                     onPress={() => !quizSubmitted && handleSelectAnswer(qIndex, oIndex)}
                     activeOpacity={quizSubmitted ? 1 : 0.7}
@@ -595,41 +884,41 @@ export default function LessonExperience() {
                       styles.optionIndicator,
                       quizAnswers[qIndex] === oIndex && styles.optionIndicatorSelected,
                       quizSubmitted && oIndex === question.correctAnswer && styles.optionIndicatorCorrect,
-                      quizSubmitted && quizAnswers[qIndex] === oIndex && 
-                        oIndex !== question.correctAnswer && styles.optionIndicatorWrong
+                      quizSubmitted && quizAnswers[qIndex] === oIndex &&
+                      oIndex !== question.correctAnswer && styles.optionIndicatorWrong
                     ]}>
                       <Text style={[
                         styles.optionIndicatorText,
                         quizAnswers[qIndex] === oIndex && styles.optionIndicatorTextSelected,
-                        quizSubmitted && (oIndex === question.correctAnswer || 
-                          (quizAnswers[qIndex] === oIndex && oIndex !== question.correctAnswer)) && 
-                          styles.optionIndicatorTextResult
+                        quizSubmitted && (oIndex === question.correctAnswer ||
+                          (quizAnswers[qIndex] === oIndex && oIndex !== question.correctAnswer)) &&
+                        styles.optionIndicatorTextResult
                       ]}>
                         {String.fromCharCode(65 + oIndex)}
                       </Text>
                     </View>
-                    
+
                     <Text style={[
                       styles.optionText,
                       quizAnswers[qIndex] === oIndex && styles.optionTextSelected,
                       quizSubmitted && oIndex === question.correctAnswer && styles.optionTextCorrect,
-                      quizSubmitted && quizAnswers[qIndex] === oIndex && 
-                        oIndex !== question.correctAnswer && styles.optionTextWrong
+                      quizSubmitted && quizAnswers[qIndex] === oIndex &&
+                      oIndex !== question.correctAnswer && styles.optionTextWrong
                     ]}>
                       {option}
                     </Text>
-                    
+
                     {quizSubmitted && oIndex === question.correctAnswer && (
                       <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.resultIcon} />
                     )}
-                    
-                    {quizSubmitted && quizAnswers[qIndex] === oIndex && 
+
+                    {quizSubmitted && quizAnswers[qIndex] === oIndex &&
                       oIndex !== question.correctAnswer && (
-                      <Ionicons name="close-circle" size={20} color="#FF5E5E" style={styles.resultIcon} />
-                    )}
+                        <Ionicons name="close-circle" size={20} color="#FF5E5E" style={styles.resultIcon} />
+                      )}
                   </TouchableOpacity>
                 ))}
-                
+
                 {quizSubmitted && (
                   <TouchableOpacity
                     style={styles.explanationButton}
@@ -639,16 +928,16 @@ export default function LessonExperience() {
                     <Text style={styles.explanationButtonText}>
                       {showExplanation === question._id ? 'Hide Explanation' : 'Show Explanation'}
                     </Text>
-                    <Ionicons 
-                      name={showExplanation === question._id ? "chevron-up" : "chevron-down"} 
-                      size={16} 
-                      color="#4F78FF" 
+                    <Ionicons
+                      name={showExplanation === question._id ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color="#4F78FF"
                     />
                   </TouchableOpacity>
                 )}
-                
+
                 {quizSubmitted && showExplanation === question._id && (
-                  <Animated.View 
+                  <Animated.View
                     entering={FadeIn.duration(300)}
                     style={styles.explanationContainer}
                   >
@@ -658,7 +947,7 @@ export default function LessonExperience() {
               </View>
             ))}
           </ScrollView>
-          
+
           <View style={styles.quizFooter}>
             {quizSubmitted ? (
               <View style={styles.quizResultsContainer}>
@@ -680,7 +969,7 @@ export default function LessonExperience() {
                         {quizResults.passed ? "Passed!" : "Try Again"}
                       </Text>
                     </View>
-                    
+
                     <View style={styles.quizActionButtons}>
                       {!quizResults.passed && (
                         <TouchableOpacity
@@ -692,7 +981,7 @@ export default function LessonExperience() {
                           <Ionicons name="refresh" size={18} color="#4F78FF" style={styles.buttonIcon} />
                         </TouchableOpacity>
                       )}
-                      
+
                       <TouchableOpacity
                         style={[styles.quizButton, styles.quizFinishButton]}
                         onPress={finishLesson}
@@ -701,11 +990,11 @@ export default function LessonExperience() {
                         <Text style={styles.quizFinishButtonText}>
                           {quizResults.passed ? "Complete Lesson" : "Back to Lesson"}
                         </Text>
-                        <Ionicons 
-                          name={quizResults.passed ? "checkmark-circle" : "arrow-back"} 
-                          size={18} 
-                          color="#FFFFFF" 
-                          style={styles.buttonIcon} 
+                        <Ionicons
+                          name={quizResults.passed ? "checkmark-circle" : "arrow-back"}
+                          size={18}
+                          color="#FFFFFF"
+                          style={styles.buttonIcon}
                         />
                       </TouchableOpacity>
                     </View>
@@ -735,10 +1024,11 @@ export default function LessonExperience() {
   // Render notes sheet
   const renderNotesSheet = () => {
     if (!lesson) return null;
-    
+
     const contentId = lesson.contents[currentContentIndex]._id;
     const existingNote = savedNotes[contentId] || '';
-    
+    const hasExistingNote = existingNote.length > 0;
+
     return (
       <Animated.View style={[styles.notesContainer, notesSheetStyle]}>
         <LinearGradient
@@ -748,7 +1038,7 @@ export default function LessonExperience() {
           end={{ x: 1, y: 1 }}
         >
           <View style={styles.notesHeader}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.notesCloseButton}
               onPress={toggleNotes}
               activeOpacity={0.7}
@@ -760,7 +1050,7 @@ export default function LessonExperience() {
               Take notes for this section
             </Text>
           </View>
-          
+
           <View style={styles.notesContent}>
             <TextInput
               style={styles.notesInput}
@@ -773,16 +1063,76 @@ export default function LessonExperience() {
               defaultValue={existingNote}
             />
           </View>
-          
+
           <View style={styles.notesFooter}>
-            <TouchableOpacity
-              style={styles.notesSaveButton}
-              onPress={saveNote}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.notesSaveButtonText}>Save Note</Text>
-              <Ionicons name="save" size={18} color="#FFFFFF" style={styles.buttonIcon} />
-            </TouchableOpacity>
+            <View style={styles.notesActionButtons}>
+              {hasExistingNote && (
+                <TouchableOpacity
+                  style={styles.notesDeleteButton}
+                  onPress={showDeleteNoteConfirmation}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#FF5E5E" style={styles.buttonIcon} />
+                  <Text style={styles.notesDeleteButtonText}>Delete</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.notesSaveButton}
+                onPress={saveNote}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.notesSaveButtonText}>
+                  {noteText.trim() ? 'Save Note' : hasExistingNote ? 'Delete Note' : 'Cancel'}
+                </Text>
+                <Ionicons
+                  name={noteText.trim() ? "save" : hasExistingNote ? "trash" : "close"}
+                  size={18}
+                  color="#FFFFFF"
+                  style={styles.buttonIcon}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+    );
+  };
+
+  // Render delete confirmation
+  const renderDeleteConfirmation = () => {
+    return (
+      <Animated.View style={[styles.deleteConfirmContainer, deleteConfirmStyle]}>
+        <LinearGradient
+          colors={['#090E23', '#1F2B5E', '#0C1339']}
+          style={styles.deleteConfirmGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.deleteConfirmContent}>
+            <Ionicons name="alert-circle" size={48} color="#FF5E5E" style={styles.deleteConfirmIcon} />
+            <Text style={styles.deleteConfirmTitle}>Delete Note?</Text>
+            <Text style={styles.deleteConfirmText}>
+              Are you sure you want to delete this note? This action cannot be undone.
+            </Text>
+
+            <View style={styles.deleteConfirmButtons}>
+              <TouchableOpacity
+                style={styles.deleteConfirmCancelButton}
+                onPress={closeDeleteConfirmation}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.deleteConfirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.deleteConfirmDeleteButton}
+                onPress={deleteNote}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.deleteConfirmDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </LinearGradient>
       </Animated.View>
@@ -801,7 +1151,7 @@ export default function LessonExperience() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={handleBackPress}
             activeOpacity={0.7}
@@ -812,19 +1162,36 @@ export default function LessonExperience() {
           {lesson && (
             <View style={styles.lessonHeaderInfo}>
               <Text style={styles.lessonTitle}>{lesson.title}</Text>
-              
+
               <View style={styles.progressBarContainer}>
-                <Animated.View 
+                <Animated.View
                   style={[styles.progressBar, progressBarStyle]}
                 />
               </View>
-              
+
               <View style={styles.progressInfo}>
                 <Text style={styles.progressText}>
                   {currentContentIndex + 1}/{lesson.contents.length}
                 </Text>
-                
+
                 <View style={styles.headerActions}>
+                  {lesson.contents[currentContentIndex]?.type === 'text' && (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        isSpeaking && styles.actionButtonActive
+                      ]}
+                      onPress={toggleSpeech}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isSpeaking ? "volume-high" : "volume-medium"}
+                        size={22}
+                        color={isSpeaking ? "#4F78FF" : "#FFFFFF"}
+                      />
+                    </TouchableOpacity>
+                  )}
+
                   <TouchableOpacity
                     style={styles.actionButton}
                     onPress={toggleNotes}
@@ -832,7 +1199,7 @@ export default function LessonExperience() {
                   >
                     <Ionicons name="create-outline" size={22} color="#FFFFFF" />
                   </TouchableOpacity>
-                  
+
                   {lesson.quiz && lesson.quiz.length > 0 && (
                     <TouchableOpacity
                       style={styles.actionButton}
@@ -859,7 +1226,7 @@ export default function LessonExperience() {
           ) : (
             <>
               {renderContent()}
-              
+
               <View style={styles.navigationButtons}>
                 <TouchableOpacity
                   style={[
@@ -870,10 +1237,10 @@ export default function LessonExperience() {
                   activeOpacity={currentContentIndex === 0 ? 0.5 : 0.7}
                   disabled={currentContentIndex === 0}
                 >
-                  <Ionicons 
-                    name="arrow-back" 
-                    size={20} 
-                    color={currentContentIndex === 0 ? "#8A8FA3" : "#FFFFFF"} 
+                  <Ionicons
+                    name="arrow-back"
+                    size={20}
+                    color={currentContentIndex === 0 ? "#8A8FA3" : "#FFFFFF"}
                   />
                   <Text style={[
                     styles.navButtonText,
@@ -882,7 +1249,7 @@ export default function LessonExperience() {
                     Previous
                   </Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={[
                     styles.navButton,
@@ -903,12 +1270,15 @@ export default function LessonExperience() {
             </>
           )}
         </ScrollView>
-        
+
         {/* Quiz Sheet */}
         {showQuiz && renderQuiz()}
-        
+
         {/* Notes Sheet */}
         {showNotes && renderNotesSheet()}
+
+        {/* Delete Confirmation */}
+        {showDeleteConfirm && renderDeleteConfirmation()}
       </LinearGradient>
     </SafeAreaView>
   );
@@ -979,6 +1349,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 12,
   },
+  actionButtonActive: {
+    backgroundColor: 'rgba(79, 120, 255, 0.5)',
+  },
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 100,
@@ -1013,6 +1386,46 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     alignItems: 'center',
   },
+  codeContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  codeBlock: {
+    padding: 16,
+    borderRadius: 12,
+  },
+  linkContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  linkContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  linkIcon: {
+    marginRight: 12,
+  },
+  linkTextContainer: {
+    flex: 1,
+  },
+  linkTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  linkUrl: {
+    fontSize: 14,
+    color: '#B4C6EF',
+  },
   videoContainer: {
     width: '100%',
     height: 220,
@@ -1020,6 +1433,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     marginBottom: 16,
+  },
+  video: {
+    width: '100%',
+    height: '100%',
   },
   videoLoading: {
     position: 'absolute',
@@ -1035,6 +1452,29 @@ const styles = StyleSheet.create({
     color: '#B4C6EF',
     marginTop: 12,
     fontSize: 14,
+  },
+  textToSpeechButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(79, 120, 255, 0.1)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  textToSpeechButtonActive: {
+    backgroundColor: '#4F78FF',
+  },
+  textToSpeechText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#4F78FF',
+    marginLeft: 8,
+  },
+  textToSpeechTextActive: {
+    color: '#FFFFFF',
   },
   navigationButtons: {
     flexDirection: 'row',
@@ -1348,7 +1788,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
+  notesActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   notesSaveButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1361,6 +1807,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
     marginRight: 8,
+  },
+  notesDeleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 94, 94, 0.1)',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginRight: 12,
+  },
+  notesDeleteButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF5E5E',
+    marginLeft: 8,
   },
   savedNoteContainer: {
     backgroundColor: 'rgba(79, 120, 255, 0.05)',
@@ -1385,6 +1847,74 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#B4C6EF',
     lineHeight: 20,
+  },
+  deleteConfirmContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(9, 14, 35, 0.8)',
+  },
+  deleteConfirmGradient: {
+    width: width * 0.85,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  deleteConfirmContent: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  deleteConfirmIcon: {
+    marginBottom: 16,
+  },
+  deleteConfirmTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  deleteConfirmText: {
+    fontSize: 16,
+    color: '#B4C6EF',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  deleteConfirmButtons: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  deleteConfirmCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  deleteConfirmCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  deleteConfirmDeleteButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#FF5E5E',
+    alignItems: 'center',
+  },
+  deleteConfirmDeleteText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   skeletonContainer: {
     width: '100%',
