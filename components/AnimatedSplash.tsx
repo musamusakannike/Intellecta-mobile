@@ -13,7 +13,7 @@ import LottieView from "lottie-react-native";
 
 const { width, height } = Dimensions.get("window");
 
-export default function EnhancedSplash({ onFinish }) {
+export default function EnhancedSplash({ onFinish }: { onFinish: () => void }) {
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -62,7 +62,7 @@ export default function EnhancedSplash({ onFinish }) {
 
       // Play the lottie animation
       if (lottieRef.current) {
-        lottieRef.current.play();
+        (lottieRef.current as any).play();
       }
     });
 
