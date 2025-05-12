@@ -8,11 +8,14 @@ import {
     TouchableWithoutFeedback,
     TextInput,
     Switch,
-    ScrollView
+    ScrollView,
+    Dimensions
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+
+const { width, height } = Dimensions.get('window');
 
 export const FilterModal = ({
     visible,
@@ -189,14 +192,24 @@ const styles = StyleSheet.create({
         right: 0,
         bottom: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        height: '100%',
+        width: '100%',
     },
     modalContent: {
+        width: width * 0.9,
+        height: height * 0.8,
         backgroundColor: '#121839',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         paddingTop: 16,
-        maxHeight: '80%',
-        zIndex: 1000,
+        position: "absolute",
+        left: width / 2,
+        top: height / 2,
+        transform: [
+            { translateX: -(width * 0.9) / 2 },
+            { translateY: -(height * 0.8) / 2 },
+        ],
+        zIndex: 1001,
     },
     modalHeader: {
         flexDirection: 'row',

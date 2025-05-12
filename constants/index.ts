@@ -27,4 +27,10 @@ export const API_ROUTES = {
     GET_LESSON_BY_ID: `${API_URL}/courses/lesson`,
     SUBMIT_QUIZ: `${API_URL}/courses/lessons`,
   },
+  NOTIFICATIONS: {
+    GET_NOTIFICATIONS: `${API_URL}/notifications`,
+    CREATE_NOTIFICATION: `${API_URL}/notifications`,
+    UPDATE_NOTIFICATION: `${API_URL}/notifications/:id`,
+    DELETE_NOTIFICATION: `${API_URL}/notifications/:id`,
+  },
 };
