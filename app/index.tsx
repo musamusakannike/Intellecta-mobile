@@ -18,7 +18,7 @@ import {
   Platform,
 } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
-import { useRouter } from "expo-router"
+import { RelativePathString, useRouter } from "expo-router"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import * as SecureStore from "expo-secure-store"
 import { Ionicons, AntDesign } from "@expo/vector-icons"
@@ -28,8 +28,6 @@ import { Skeleton } from "../components/Skeleton"
 import { Avatar } from "../components/Avatar"
 import { CourseCard } from "../components/CourseCard"
 import { Pagination } from "../components/Pagination"
-import { FilterModal } from "../components/FilterModal"
-import { NotificationsModal } from "../components/NotificationsModal"
 import { NotificationBadge } from "../components/NotificationBadge"
 import { useNotifications } from "../hooks/useNotifications"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -67,6 +65,7 @@ interface FeaturedItem {
   subtitle: string
   color1: string
   color2: string
+  route: RelativePathString
 }
 
 // Categories with icons
@@ -82,13 +81,14 @@ const categories = [
 ]
 
 // Featured sliders
-const featuredItems = [
+const featuredItems: FeaturedItem[] = [
   {
     id: 1,
     title: "Spring Sale",
     subtitle: "Get 50% off selected courses",
     color1: "#4F78FF",
     color2: "#8A53FF",
+    route: "/courses" as RelativePathString,
   },
   {
     id: 2,
@@ -96,6 +96,7 @@ const featuredItems = [
     subtitle: "Check out our latest additions",
     color1: "#FF5E5E",
     color2: "#FF9D5C",
+    route: "/courses" as RelativePathString,
   },
   {
     id: 3,
@@ -103,6 +104,7 @@ const featuredItems = [
     subtitle: "Unlimited learning for one price",
     color1: "#4CAF50",
     color2: "#8BC34A",
+    route: "/premium/subscribe" as RelativePathString,
   },
 ]
 
@@ -390,10 +392,10 @@ export default function Dashboard() {
           <Text style={styles.featuredTitle}>{item.title}</Text>
           <Text style={styles.featuredSubtitle}>{item.subtitle}</Text>
 
-          <View style={styles.featuredButton}>
+          <TouchableOpacity onPress={() => router.push({ pathname: item.route })} style={styles.featuredButton}>
             <Text style={styles.featuredButtonText}>Explore</Text>
             <AntDesign name="arrowright" size={16} color="#FFFFFF" style={styles.featuredButtonIcon} />
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.featuredDeco}>
@@ -596,20 +598,7 @@ export default function Dashboard() {
         </ScrollView>
 
         {/* Notifications Modal */}
-        <NotificationsModal
-          visible={notificationsModalVisible}
-          onClose={() => setNotificationsModalVisible(false)}
-          token={token}
-        />
-
         {/* Filter Modal */}
-        <FilterModal
-          visible={filterModalVisible}
-          onClose={() => setFilterModalVisible(false)}
-          onApply={applyFilters}
-          onReset={resetFilters}
-          initialFilters={filters}
-        />
       </LinearGradient>
     </SafeAreaView>
   )
