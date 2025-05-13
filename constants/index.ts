@@ -6,7 +6,7 @@ export const API_ROUTES = {
     REGISTER: `${API_URL}/auth/register`,
     FORGOT_PASSWORD: `${API_URL}/auth/forgot-password`,
     RESET_PASSWORD: `${API_URL}/auth/reset-password`,
-    VERIFY_EMAIL: `${API_URL}/auth/verify-email`,
+    REQUEST_VERIFY_EMAIL: `${API_URL}/auth/request-verify-email`,
   },
   USERS: {
     GET_USER: `${API_URL}/users/me`,

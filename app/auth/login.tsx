@@ -21,6 +21,7 @@ import { ToastContext } from "@/components/Toast/ToastContext";
 import * as SecureStore from 'expo-secure-store';
 import { API_ROUTES } from '@/constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { VerifyEmailModal } from '@/components/VerifyEmailModal';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -29,6 +30,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isFormValid, setIsFormValid] = useState(false);
   const [isFocused, setIsFocused] = useState({ email: false, password: false });
+  const [isVerifyEmailModal, setIsVerifyEmailModal] = useState(false);
 
   const passwordRef = useRef<TextInput>(null);
   const router = useRouter();
@@ -114,6 +116,10 @@ export default function Login() {
 
   const handleForgotPassword = () => {
     router.push('/auth/forgot-password');
+  };
+
+  const handleVerifyEmail = () => {
+    setIsVerifyEmailModal(true);
   };
 
   return (
@@ -211,12 +217,20 @@ export default function Login() {
                   </TouchableOpacity>
                 </View>
 
+                <View style={styles.forgotPasswordContainer}>
+                <TouchableOpacity
+                  style={styles.forgotPassword}
+                  onPress={handleVerifyEmail}
+                >
+                  <Text style={styles.forgotPasswordText}>Verify Email</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.forgotPassword}
                   onPress={handleForgotPassword}
                 >
                   <Text style={styles.forgotPasswordText}>Forgot password?</Text>
                 </TouchableOpacity>
+                </View>
 
                 <TouchableOpacity
                   style={[
@@ -261,6 +275,11 @@ export default function Login() {
               </TouchableOpacity>
             </View>
           </ScrollView>
+
+          <VerifyEmailModal
+            visible={isVerifyEmailModal}
+            onClose={() => setIsVerifyEmailModal(false)}
+          />
         </LinearGradient>
       </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
@@ -441,5 +460,9 @@ const styles = StyleSheet.create({
     color: '#4F78FF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  forgotPasswordContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   }
 });
