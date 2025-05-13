@@ -22,6 +22,7 @@ import * as SecureStore from 'expo-secure-store';
 import { API_ROUTES } from '@/constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { VerifyEmailModal } from '@/components/VerifyEmailModal';
+import { ForgotPasswordModal } from '@/components/ForgotPasswordModal';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -31,6 +32,7 @@ export default function Login() {
   const [isFormValid, setIsFormValid] = useState(false);
   const [isFocused, setIsFocused] = useState({ email: false, password: false });
   const [isVerifyEmailModal, setIsVerifyEmailModal] = useState(false);
+  const [isForgotPasswordModal, setIsForgotPasswordModal] = useState(false);
 
   const passwordRef = useRef<TextInput>(null);
   const router = useRouter();
@@ -114,12 +116,12 @@ export default function Login() {
     router.push('/auth/register');
   };
 
-  const handleForgotPassword = () => {
-    router.push('/auth/forgot-password');
-  };
-
   const handleVerifyEmail = () => {
     setIsVerifyEmailModal(true);
+  };
+
+  const handleForgotPassword = () => {
+    setIsForgotPasswordModal(true);
   };
 
   return (
@@ -143,7 +145,7 @@ export default function Login() {
           >
             <View style={styles.header}>
               <Image
-                source={require('@/assets/images/icon.png')} 
+                source={require('@/assets/images/icon.png')}
                 style={styles.logo}
                 defaultSource={require('@/assets/images/icon.png')}
               />
@@ -218,18 +220,18 @@ export default function Login() {
                 </View>
 
                 <View style={styles.forgotPasswordContainer}>
-                <TouchableOpacity
-                  style={styles.forgotPassword}
-                  onPress={handleVerifyEmail}
-                >
-                  <Text style={styles.forgotPasswordText}>Verify Email</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.forgotPassword}
-                  onPress={handleForgotPassword}
-                >
-                  <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.forgotPassword}
+                    onPress={handleVerifyEmail}
+                  >
+                    <Text style={styles.forgotPasswordText}>Verify Email</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.forgotPassword}
+                    onPress={handleForgotPassword}
+                  >
+                    <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+                  </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity
@@ -279,6 +281,10 @@ export default function Login() {
           <VerifyEmailModal
             visible={isVerifyEmailModal}
             onClose={() => setIsVerifyEmailModal(false)}
+          />
+          <ForgotPasswordModal
+            visible={isForgotPasswordModal}
+            onClose={() => setIsForgotPasswordModal(false)}
           />
         </LinearGradient>
       </KeyboardAvoidingView>
