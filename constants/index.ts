@@ -30,7 +30,8 @@ export const API_ROUTES = {
   NOTIFICATIONS: {
     GET_NOTIFICATIONS: `${API_URL}/notifications`,
     CREATE_NOTIFICATION: `${API_URL}/notifications`,
-    UPDATE_NOTIFICATION: `${API_URL}/notifications/:id`,
-    DELETE_NOTIFICATION: `${API_URL}/notifications/:id`,
+    MARK_AS_READ: `${API_URL}/notifications`,
+    GET_UNREAD: `${API_URL}/notifications/unread`,
+    MARK_ALL_AS_READ: `${API_URL}/notifications/mark-all-read`,
   },
 };

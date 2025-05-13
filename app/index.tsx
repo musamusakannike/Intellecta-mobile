@@ -1,5 +1,3 @@
-"use client"
-
 import React, { useState, useEffect, useContext, useCallback } from "react"
 import {
   View,
@@ -16,9 +14,10 @@ import {
   type NativeSyntheticEvent,
   type NativeScrollEvent,
   Platform,
+  ActivityIndicator,
 } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
-import { RelativePathString, useRouter } from "expo-router"
+import { type RelativePathString, useRouter } from "expo-router"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import * as SecureStore from "expo-secure-store"
 import { Ionicons, AntDesign } from "@expo/vector-icons"
@@ -29,7 +28,6 @@ import { Avatar } from "../components/Avatar"
 import { CourseCard } from "../components/CourseCard"
 import { Pagination } from "../components/Pagination"
 import { NotificationBadge } from "../components/NotificationBadge"
-import { useNotifications } from "../hooks/useNotifications"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from "react-native-reanimated"
 import { API_ROUTES } from "@/constants"
@@ -51,6 +49,10 @@ interface FilterState {
   isFeatured: boolean
   sortBy: string
   sortOrder: string
+  category: string
+  search: string
+  page: number
+  limit: number
 }
 
 interface Category {
@@ -108,6 +110,167 @@ const featuredItems: FeaturedItem[] = [
   },
 ]
 
+
+// Update the useNotifications hook to include the API calls
+const useNotifications = () => {
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notifications, setNotifications] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const toast = useContext(ToastContext)
+
+
+  const fetchAllNotifications = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const storedToken = await SecureStore.getItemAsync("token")
+
+      const response = await fetch(`${API_ROUTES.NOTIFICATIONS.GET_NOTIFICATIONS}`, {
+        headers: {
+          Authorization: `Bearer ${storedToken}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setNotifications(data.notifications)
+        return data
+      } else {
+        toast?.showToast({
+          type: "error",
+          message: data.message || "Failed to fetch notifications",
+        })
+        return { notifications: [] }
+      }
+    } catch (error) {
+      console.error("Error fetching notifications:", error)
+      toast?.showToast({
+        type: "error",
+        message: "Network error. Please check your connection.",
+      })
+      return { notifications: [] }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  const fetchUnreadNotifications = useCallback(async () => {
+    try {
+      const storedToken = await SecureStore.getItemAsync("token")
+
+      const response = await fetch(`${API_ROUTES.NOTIFICATIONS.GET_UNREAD}`, {
+        headers: {
+          Authorization: `Bearer ${storedToken}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setUnreadCount(data.count)
+        return data
+      } else {
+        console.error("Failed to fetch unread notifications:", data.message)
+        return { count: 0, notifications: [] }
+      }
+    } catch (error) {
+      console.error("Error fetching unread notifications:", error)
+      return { count: 0, notifications: [] }
+    }
+  }, [])
+
+  const markNotificationAsRead = useCallback(async (notificationId: string) => {
+    try {
+      const storedToken = await SecureStore.getItemAsync("token")
+
+      const response = await fetch(`${API_ROUTES.NOTIFICATIONS.MARK_AS_READ}/${notificationId}/read`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${storedToken}`,
+        },
+      })
+
+      if (response.ok) {
+        // Update the unread count
+        fetchUnreadNotifications()
+        // Update the notifications list
+        fetchAllNotifications()
+
+        toast?.showToast({
+          type: "success",
+          message: "Notification marked as read",
+        })
+      } else {
+        const data = await response.json()
+        toast?.showToast({
+          type: "error",
+          message: data.message || "Failed to mark notification as read",
+        })
+      }
+    } catch (error) {
+      console.error("Error marking notification as read:", error)
+      toast?.showToast({
+        type: "error",
+        message: "Network error. Please check your connection.",
+      })
+    }
+  }, [])
+
+  const markAllAsRead = useCallback(async () => {
+    try {
+      const storedToken = await SecureStore.getItemAsync("token")
+
+      const response = await fetch(`${API_ROUTES.NOTIFICATIONS.MARK_ALL_AS_READ}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${storedToken}`,
+        },
+      })
+
+      if (response.ok) {
+        setUnreadCount(0)
+        fetchAllNotifications()
+
+        toast?.showToast({
+          type: "success",
+          message: "All notifications marked as read",
+        })
+      } else {
+        const data = await response.json()
+        toast?.showToast({
+          type: "error",
+          message: data.message || "Failed to mark all notifications as read",
+        })
+      }
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error)
+      toast?.showToast({
+        type: "error",
+        message: "Network error. Please check your connection.",
+      })
+    }
+  }, [])
+
+  // Fetch unread notifications on mount
+  useEffect(() => {
+    fetchUnreadNotifications()
+  }, [fetchUnreadNotifications])
+
+  return {
+    unreadCount,
+    notifications,
+    isLoading,
+    fetchNotifications: {
+      data: { notifications },
+      isLoading,
+      refetch: fetchAllNotifications,
+    },
+    fetchUnreadNotifications,
+    markNotificationAsRead,
+    markAllAsRead,
+  }
+}
+
 export default function Dashboard() {
   const [username, setUsername] = useState("Learner")
   const [profileImage, setProfileImage] = useState<string | null>(null)
@@ -127,13 +290,17 @@ export default function Dashboard() {
     isFeatured: false,
     sortBy: "createdAt",
     sortOrder: "desc",
+    category: "",
+    search: "",
+    page: 1,
+    limit: 10,
   })
   const [activeFilters, setActiveFilters] = useState(0)
 
   const toast = useContext(ToastContext)
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { unreadCount, fetchNotifications, markAllAsRead } = useNotifications()
+  const { unreadCount, fetchNotifications, markAllAsRead, markNotificationAsRead } = useNotifications()
 
   // Animated values for scrolling effects
   const scrollY = useSharedValue(0)
@@ -182,24 +349,31 @@ export default function Dashboard() {
             isFeatured: false,
             sortBy: "createdAt",
             sortOrder: "desc",
+            category: "",
+            search: "",
+            page: 1,
+            limit: 10,
           }
-          : filters
-
-        const category = selectedCategory !== "All" ? selectedCategory : ""
+          : {
+            ...filters,
+            page,
+            search: searchQuery,
+            category: selectedCategory !== "All" ? selectedCategory : "",
+          }
 
         // Construct the query string
         const params = new URLSearchParams()
-        if (searchQuery) params.append("search", searchQuery)
-        if (category) params.append("category", category)
+        if (appliedFilters.search) params.append("search", appliedFilters.search)
+        if (appliedFilters.category) params.append("category", appliedFilters.category)
         if (appliedFilters.minPrice) params.append("minPrice", appliedFilters.minPrice)
         if (appliedFilters.maxPrice) params.append("maxPrice", appliedFilters.maxPrice)
         if (appliedFilters.isFeatured) params.append("isFeatured", "true")
         if (appliedFilters.sortBy) params.append("sortBy", appliedFilters.sortBy)
         if (appliedFilters.sortOrder) params.append("sortOrder", appliedFilters.sortOrder)
-        params.append("page", page.toString())
-        params.append("limit", "10")
+        params.append("page", appliedFilters.page.toString())
+        params.append("limit", appliedFilters.limit.toString())
 
-        const storedToken = await AsyncStorage.getItem("token")
+        const storedToken = await SecureStore.getItemAsync("token")
         const response = await fetch(`${API_ROUTES.COURSES.GET_COURSES}?${params.toString()}`, {
           headers: {
             Authorization: `Bearer ${storedToken}`,
@@ -241,9 +415,9 @@ export default function Dashboard() {
   const handleRefresh = () => {
     setRefreshing(true)
     fetchCourses(1, true)
-    fetchNotifications()
+    fetchNotifications.refetch()
   }
-
+  
   // Apply filters
   const applyFilters = (newFilters: FilterState) => {
     setFilters(newFilters)
@@ -268,6 +442,10 @@ export default function Dashboard() {
       isFeatured: false,
       sortBy: "createdAt",
       sortOrder: "desc",
+      category: "",
+      search: "",
+      page: 1,
+      limit: 10,
     }
     setFilters(defaultFilters)
     setActiveFilters(0)
@@ -598,12 +776,188 @@ export default function Dashboard() {
         </ScrollView>
 
         {/* Notifications Modal */}
+        {notificationsModalVisible && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Notifications</Text>
+                <TouchableOpacity onPress={() => setNotificationsModalVisible(false)} style={styles.modalCloseButton}>
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
+              {fetchNotifications.isLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#4F78FF" />
+                </View>
+              ) : fetchNotifications.data?.notifications?.length > 0 ? (
+                <FlatList
+                  data={fetchNotifications.data.notifications}
+                  keyExtractor={(item: any) => item._id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={styles.notificationItem} onPress={() => markNotificationAsRead(item._id)}>
+                      <View
+                        style={[
+                          styles.notificationTypeIndicator,
+                          item.type === "info"
+                            ? styles.infoIndicator
+                            : item.type === "warning"
+                              ? styles.warningIndicator
+                              : styles.successIndicator,
+                        ]}
+                      />
+                      <View style={styles.notificationContent}>
+                        <Text style={styles.notificationTitle}>{item.title}</Text>
+                        <Text style={styles.notificationMessage}>{item.message}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                  contentContainerStyle={styles.notificationsList}
+                />
+              ) : (
+                <View style={styles.emptyNotifications}>
+                  <Ionicons name="notifications-off-outline" size={60} color="#4F78FF" />
+                  <Text style={styles.emptyNotificationsText}>No notifications yet</Text>
+                </View>
+              )}
+
+              {fetchNotifications.data?.notifications?.length > 0 && (
+                <TouchableOpacity style={styles.markAllReadButton} onPress={markAllAsRead}>
+                  <Text style={styles.markAllReadText}>Mark all as read</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Filter Modal */}
+        {filterModalVisible && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Filter Courses</Text>
+                <TouchableOpacity onPress={() => setFilterModalVisible(false)} style={styles.modalCloseButton}>
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.filterContent}>
+                <View style={styles.filterSection}>
+                  <Text style={styles.filterSectionTitle}>Price Range</Text>
+                  <View style={styles.priceInputs}>
+                    <View style={styles.priceInputContainer}>
+                      <Text style={styles.priceInputLabel}>Min</Text>
+                      <TextInput
+                        style={styles.priceInput}
+                        placeholder="0"
+                        placeholderTextColor="#8A8FA3"
+                        keyboardType="numeric"
+                        value={filters.minPrice}
+                        onChangeText={(text) => setFilters({ ...filters, minPrice: text })}
+                      />
+                    </View>
+                    <View style={styles.priceInputDivider} />
+                    <View style={styles.priceInputContainer}>
+                      <Text style={styles.priceInputLabel}>Max</Text>
+                      <TextInput
+                        style={styles.priceInput}
+                        placeholder="1000"
+                        placeholderTextColor="#8A8FA3"
+                        keyboardType="numeric"
+                        value={filters.maxPrice}
+                        onChangeText={(text) => setFilters({ ...filters, maxPrice: text })}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.filterSection}>
+                  <Text style={styles.filterSectionTitle}>Featured Courses</Text>
+                  <TouchableOpacity
+                    style={styles.switchContainer}
+                    onPress={() => setFilters({ ...filters, isFeatured: !filters.isFeatured })}
+                  >
+                    <Text style={styles.switchLabel}>Show only featured courses</Text>
+                    <View style={[styles.switchTrack, filters.isFeatured && styles.switchTrackActive]}>
+                      <View style={[styles.switchThumb, filters.isFeatured && styles.switchThumbActive]} />
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.filterSection}>
+                  <Text style={styles.filterSectionTitle}>Sort By</Text>
+                  <View style={styles.sortOptions}>
+                    <TouchableOpacity
+                      style={[styles.sortOption, filters.sortBy === "createdAt" && styles.sortOptionActive]}
+                      onPress={() => setFilters({ ...filters, sortBy: "createdAt" })}
+                    >
+                      <Text
+                        style={[styles.sortOptionText, filters.sortBy === "createdAt" && styles.sortOptionTextActive]}
+                      >
+                        Date
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortOption, filters.sortBy === "price" && styles.sortOptionActive]}
+                      onPress={() => setFilters({ ...filters, sortBy: "price" })}
+                    >
+                      <Text style={[styles.sortOptionText, filters.sortBy === "price" && styles.sortOptionTextActive]}>
+                        Price
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortOption, filters.sortBy === "title" && styles.sortOptionActive]}
+                      onPress={() => setFilters({ ...filters, sortBy: "title" })}
+                    >
+                      <Text style={[styles.sortOptionText, filters.sortBy === "title" && styles.sortOptionTextActive]}>
+                        Title
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.filterSection}>
+                  <Text style={styles.filterSectionTitle}>Sort Order</Text>
+                  <View style={styles.sortOptions}>
+                    <TouchableOpacity
+                      style={[styles.sortOption, filters.sortOrder === "asc" && styles.sortOptionActive]}
+                      onPress={() => setFilters({ ...filters, sortOrder: "asc" })}
+                    >
+                      <Text style={[styles.sortOptionText, filters.sortOrder === "asc" && styles.sortOptionTextActive]}>
+                        Ascending
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortOption, filters.sortOrder === "desc" && styles.sortOptionActive]}
+                      onPress={() => setFilters({ ...filters, sortOrder: "desc" })}
+                    >
+                      <Text
+                        style={[styles.sortOptionText, filters.sortOrder === "desc" && styles.sortOptionTextActive]}
+                      >
+                        Descending
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+
+              <View style={styles.filterActions}>
+                <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
+                  <Text style={styles.resetButtonText}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.applyButton} onPress={() => applyFilters(filters)}>
+                  <Text style={styles.applyButtonText}>Apply Filters</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
       </LinearGradient>
     </SafeAreaView>
   )
 }
 
+// Add these styles to the StyleSheet at the bottom of the file
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -899,5 +1253,226 @@ const styles = StyleSheet.create({
   },
   avatar: {
     marginLeft: 8,
+  },
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(9, 14, 35, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  modalContainer: {
+    width: "90%",
+    maxHeight: "80%",
+    backgroundColor: "#1F2B5E",
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  filterContent: {
+    padding: 16,
+  },
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    marginBottom: 12,
+  },
+  priceInputs: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  priceInputContainer: {
+    flex: 1,
+  },
+  priceInputLabel: {
+    fontSize: 14,
+    color: "#B4C6EF",
+    marginBottom: 8,
+  },
+  priceInput: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: "#FFFFFF",
+    fontSize: 16,
+  },
+  priceInputDivider: {
+    width: 20,
+    height: 2,
+    backgroundColor: "#B4C6EF",
+    marginHorizontal: 12,
+    marginTop: 20,
+  },
+  switchContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  switchLabel: {
+    fontSize: 14,
+    color: "#FFFFFF",
+  },
+  switchTrack: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    padding: 2,
+  },
+  switchTrackActive: {
+    backgroundColor: "#4F78FF",
+  },
+  switchThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  switchThumbActive: {
+    transform: [{ translateX: 22 }],
+  },
+  sortOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginHorizontal: -6,
+  },
+  sortOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    marginRight: 12,
+    marginBottom: 12,
+  },
+  sortOptionActive: {
+    backgroundColor: "#4F78FF",
+  },
+  sortOptionText: {
+    fontSize: 14,
+    color: "#B4C6EF",
+  },
+  sortOptionTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  filterActions: {
+    flexDirection: "row",
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
+  },
+  resetButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    marginRight: 12,
+  },
+  resetButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  applyButton: {
+    flex: 2,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#4F78FF",
+  },
+  applyButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  notificationsList: {
+    padding: 16,
+  },
+  notificationItem: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  notificationTypeIndicator: {
+    width: 4,
+    borderRadius: 2,
+    marginRight: 12,
+  },
+  infoIndicator: {
+    backgroundColor: "#4F78FF",
+  },
+  warningIndicator: {
+    backgroundColor: "#FF9D5C",
+  },
+  successIndicator: {
+    backgroundColor: "#4CAF50",
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    marginBottom: 4,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    color: "#B4C6EF",
+  },
+  emptyNotifications: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+  },
+  emptyNotificationsText: {
+    fontSize: 16,
+    color: "#B4C6EF",
+    marginTop: 16,
+  },
+  markAllReadButton: {
+    padding: 16,
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
+  },
+  markAllReadText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#4F78FF",
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
 })
