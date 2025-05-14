@@ -9,10 +9,10 @@ interface NotificationBadgeProps {
 export const NotificationBadge = ({ count, style }: NotificationBadgeProps) => {
   if (count <= 0) {
     return (
-      <View style={[styles.dot, style]} />
+      <View style={[style]} />
     );
   }
-  
+
   return (
     <View style={[styles.badge, style]}>
       <Text style={styles.count}>
