@@ -264,8 +264,8 @@ export default function Login() {
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.socialButton}>
-                  <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
-                  <Text style={styles.socialButtonText}>Apple</Text>
+                  <Ionicons name="logo-github" size={20} color="#FFFFFF" />
+                  <Text style={styles.socialButtonText}>GitHub</Text>
                 </TouchableOpacity>
               </View>
             </View>

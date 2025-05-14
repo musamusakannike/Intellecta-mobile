@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useState, useEffect, useContext, useCallback } from "react"
 import {
   View,
@@ -31,6 +33,7 @@ import { NotificationBadge } from "../components/NotificationBadge"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from "react-native-reanimated"
 import { API_ROUTES } from "@/constants"
+import CommunityNetInfo from '@react-native-community/netinfo';
 
 const { width } = Dimensions.get("window")
 
@@ -110,14 +113,12 @@ const featuredItems: FeaturedItem[] = [
   },
 ]
 
-
 // Update the useNotifications hook to include the API calls
 const useNotifications = () => {
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const toast = useContext(ToastContext)
-
 
   const fetchAllNotifications = useCallback(async () => {
     try {
@@ -271,6 +272,34 @@ const useNotifications = () => {
   }
 }
 
+// Remove useOfflineSupport hook and keep only network status check
+const useNetworkStatus = () => {
+  const [isOnline, setIsOnline] = useState(true)
+  const toast = useContext(ToastContext)
+
+  useEffect(() => {
+    const unsubscribe = CommunityNetInfo.addEventListener((state) => {
+      setIsOnline(state.isConnected ?? true)
+
+      if (state.isConnected && !state.isInternetReachable) {
+        toast?.showToast({
+          type: "warning",
+          message: "Limited connectivity detected",
+        })
+      } else if (!state.isConnected) {
+        toast?.showToast({
+          type: "info",
+          message: "You're offline. Using cached data.",
+        })
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  return { isOnline }
+}
+
 export default function Dashboard() {
   const [username, setUsername] = useState("Learner")
   const [profileImage, setProfileImage] = useState<string | null>(null)
@@ -301,6 +330,7 @@ export default function Dashboard() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { unreadCount, fetchNotifications, markAllAsRead, markNotificationAsRead } = useNotifications()
+  const { isOnline } = useNetworkStatus()
 
   // Animated values for scrolling effects
   const scrollY = useSharedValue(0)
@@ -341,6 +371,17 @@ export default function Dashboard() {
     async (page = 1, resetFilters = false) => {
       try {
         setIsLoading(true)
+
+        // If offline, use cached data
+        if (!isOnline) {
+          toast?.showToast({
+            type: "info",
+            message: "You're offline. Using cached data.",
+          })
+          setIsLoading(false)
+          setRefreshing(false)
+          return
+        }
 
         const appliedFilters: FilterState = resetFilters
           ? {
@@ -403,7 +444,7 @@ export default function Dashboard() {
         setRefreshing(false)
       }
     },
-    [searchQuery, selectedCategory, filters],
+    [searchQuery, selectedCategory, filters, isOnline],
   )
 
   // Initial fetch
@@ -417,7 +458,7 @@ export default function Dashboard() {
     fetchCourses(1, true)
     fetchNotifications.refetch()
   }
-  
+
   // Apply filters
   const applyFilters = (newFilters: FilterState) => {
     setFilters(newFilters)
@@ -501,81 +542,21 @@ export default function Dashboard() {
     markAllAsRead()
   }
 
-  // Render category item
-  const renderCategoryItem = ({ item }: { item: Category }) => {
-    const styles = StyleSheet.create({
-      categoryItem: {
-        alignItems: "center",
-        marginRight: 16,
-        minWidth: 70,
-      },
-      categoryIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: "rgba(255, 255, 255, 0.08)",
-        justifyContent: "center",
-        alignItems: "center",
-        marginBottom: 8,
-      },
-      categoryIconActive: {
-        backgroundColor: "#4F78FF",
-      },
-      categoryText: {
-        fontSize: 12,
-        color: "#8A8FA3",
-      },
-      categoryTextActive: {
-        color: "#FFFFFF",
-        fontWeight: "600",
-      },
-    })
-
-    return (
-      <TouchableOpacity
-        style={[styles.categoryItem, selectedCategory === item.name && styles.categoryIcon]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-          setSelectedCategory(item.name)
-          fetchCourses(1)
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.categoryIcon, selectedCategory === item.name && styles.categoryIconActive]}>
-          <Ionicons name={item.icon as any} size={20} color={selectedCategory === item.name ? "#FFFFFF" : "#8A8FA3"} />
-        </View>
-        <Text style={[styles.categoryText, selectedCategory === item.name && styles.categoryTextActive]}>
-          {item.name}
-        </Text>
-      </TouchableOpacity>
-    )
-  }
 
   // Render featured slider item
-  const renderFeaturedItem = ({ item }: { item: FeaturedItem }) => (
-    <TouchableOpacity
-      style={styles.featuredItem}
-      activeOpacity={0.9}
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      }}
-    >
-      <LinearGradient
-        colors={[item.color1, item.color2]}
-        style={[styles.featuredGradient, { borderRadius: 16 }]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
+
+
+  const renderFeaturedItem = (item: FeaturedItem) => (
+    <TouchableOpacity style={styles.featuredItem} activeOpacity={0.9} onPress={() => router.push(item.route)}>
+      <LinearGradient colors={[item.color1, item.color2]} style={styles.featuredGradient}>
         <View style={styles.featuredContent}>
           <Text style={styles.featuredTitle}>{item.title}</Text>
           <Text style={styles.featuredSubtitle}>{item.subtitle}</Text>
-
-          <TouchableOpacity onPress={() => router.push({ pathname: item.route })} style={styles.featuredButton}>
+          <TouchableOpacity style={styles.featuredButton} onPress={() => router.push(item.route)}>
             <Text style={styles.featuredButtonText}>Explore</Text>
             <AntDesign name="arrowright" size={16} color="#FFFFFF" style={styles.featuredButtonIcon} />
           </TouchableOpacity>
         </View>
-
         <View style={styles.featuredDeco}>
           <View style={styles.featuredCircle} />
           <View style={[styles.featuredCircle, styles.featuredCircle2]} />
@@ -584,9 +565,12 @@ export default function Dashboard() {
     </TouchableOpacity>
   )
 
+
   // Render course item
   const renderCourseItem = ({ item }: { item: Course }) => (
-    <CourseCard course={item} onPress={() => navigateToCourseDetails(item)} style={styles.courseCard} />
+    <View style={styles.courseCardContainer}>
+      <CourseCard course={item} onPress={() => navigateToCourseDetails(item)} style={styles.courseCard} />
+    </View>
   )
 
   // Empty state
@@ -620,6 +604,18 @@ export default function Dashboard() {
     </>
   )
 
+  // Offline banner
+  const renderOfflineBanner = () => {
+    if (isOnline) return null
+
+    return (
+      <View style={styles.offlineBanner}>
+        <Ionicons name="cloud-offline-outline" size={18} color="#FFFFFF" />
+        <Text style={styles.offlineBannerText}>You're offline. Using cached data.</Text>
+      </View>
+    )
+  }
+
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
@@ -630,9 +626,11 @@ export default function Dashboard() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
+        {renderOfflineBanner()}
+
         {/* Main Content */}
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, !isOnline && styles.scrollContentOffline]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -714,7 +712,24 @@ export default function Dashboard() {
           <View style={styles.categoriesContainer}>
             <FlatList
               data={categories}
-              renderItem={renderCategoryItem}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.categoryItem, selectedCategory === item.name && styles.categoryIconActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    setSelectedCategory(item.name)
+                    fetchCourses(1)
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.categoryIcon, selectedCategory === item.name && styles.categoryIconActive]}>
+                    <Ionicons name={item.icon as any} size={20} color={selectedCategory === item.name ? "#FFFFFF" : "#8A8FA3"} />
+                  </View>
+                  <Text style={[styles.categoryText, selectedCategory === item.name && styles.categoryTextActive]}>
+                    {item.name}
+                  </Text>
+                </TouchableOpacity>
+              )}
               keyExtractor={(item) => item.id.toString()}
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -724,16 +739,16 @@ export default function Dashboard() {
 
           {/* Featured Slider */}
           <View style={styles.featuredContainer}>
-            <FlatList
-              data={featuredItems}
-              renderItem={renderFeaturedItem}
-              keyExtractor={(item) => item.id.toString()}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.featuredList}
-              snapToInterval={width * 0.9 + 10}
-              decelerationRate="fast"
-              pagingEnabled
+            <FlatList 
+              data={featuredItems} 
+              renderItem={({ item }) => renderFeaturedItem(item)} 
+              keyExtractor={(item) => item.id.toString()} 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.featuredList} 
+              snapToInterval={width * 0.9 + 10} 
+              decelerationRate="fast" 
+              pagingEnabled 
             />
           </View>
 
@@ -752,12 +767,9 @@ export default function Dashboard() {
             ) : courses.length > 0 ? (
               <>
                 {courses.map((course) => (
-                  <CourseCard
-                    key={course._id}
-                    course={course}
-                    onPress={() => navigateToCourseDetails(course)}
-                    style={styles.courseCard}
-                  />
+                  <View key={course._id} style={styles.courseCardContainer}>
+                    <CourseCard course={course} onPress={() => navigateToCourseDetails(course)} style={styles.courseCard} />
+                  </View>
                 ))}
 
                 {/* Pagination */}
@@ -1006,6 +1018,10 @@ const styles = StyleSheet.create({
     marginRight: 16,
     position: "relative",
   },
+  iconButtonActive: {
+    backgroundColor: "#4F78FF",
+    borderRadius: 20,
+  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1065,6 +1081,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 150,
     paddingBottom: 20,
+  },
+  scrollContentOffline: {
+    paddingTop: 180, // Extra space for offline banner
   },
   categoriesContainer: {
     marginBottom: 16,
@@ -1165,8 +1184,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#B4C6EF",
   },
-  courseCard: {
+  courseCardContainer: {
     marginBottom: 16,
+  },
+  courseCard: {
+    marginBottom: 0,
   },
   emptyContainer: {
     alignItems: "center",
@@ -1474,5 +1496,50 @@ const styles = StyleSheet.create({
     padding: 40,
     alignItems: "center",
     justifyContent: "center",
+  },
+  offlineBanner: {
+    backgroundColor: "#FF5E5E",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  },
+  offlineBannerText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 8,
+  },
+  categoryItem: {
+    alignItems: "center",
+    marginRight: 16,
+    minWidth: 70,
+  },
+  categoryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  categoryIconActive: {
+    backgroundColor: "#4F78FF",
+    borderRadius: 10,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: "#8A8FA3",
+  },
+  categoryTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 })

@@ -308,8 +308,8 @@ export default function Register() {
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.socialButton}>
-                  <Ionicons name="logo-apple" size={20} color="#FFFFFF" />
-                  <Text style={styles.socialButtonText}>Apple</Text>
+                  <Ionicons name="logo-github" size={20} color="#FFFFFF" />
+                  <Text style={styles.socialButtonText}>GitHub</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -335,12 +335,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flex: 1,
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
   },
   header: {
     alignItems: 'center',
+    paddingTop: 20,
     marginBottom: 40,
   },
   logo: {
