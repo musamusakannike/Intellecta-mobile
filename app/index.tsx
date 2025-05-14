@@ -167,7 +167,8 @@ const useNotifications = () => {
 
       const data = await response.json()
 
-      if (response.ok) {
+      if (data.status === "success") {
+        console.log("Unread notifications", JSON.stringify(data, null, 2))
         setUnreadCount(data.count)
         return data
       } else {
@@ -544,8 +545,6 @@ export default function Dashboard() {
 
 
   // Render featured slider item
-
-
   const renderFeaturedItem = (item: FeaturedItem) => (
     <TouchableOpacity style={styles.featuredItem} activeOpacity={0.9} onPress={() => router.push(item.route)}>
       <LinearGradient colors={[item.color1, item.color2]} style={styles.featuredGradient}>

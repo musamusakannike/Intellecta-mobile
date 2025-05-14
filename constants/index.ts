@@ -1,4 +1,4 @@
-export const API_URL = "http://192.168.84.29:5000/api/v1";
+export const API_URL = "http://192.168.131.29:5000/api/v1";
 
 export const API_ROUTES = {
   AUTH: {
@@ -21,6 +21,9 @@ export const API_ROUTES = {
     UPDATE_COURSE: `${API_URL}/courses/:id`,
     DELETE_COURSE: `${API_URL}/courses/:id`,
     GET_TOPIC_BY_ID: `${API_URL}/courses/topics`,
+    UPDATE_REVIEW: `${API_URL}/courses/reviews`,
+    CREATE_REVIEW: `${API_URL}/courses`,
+    DELETE_REVIEW: `${API_URL}/courses/reviews`,
   },
   LESSONS: {
     GET_LESSONS: `${API_URL}/courses/lessons`,
