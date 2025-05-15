@@ -1,8 +1,52 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { isFavorite, toggleFavorite, favoritesEmitter } from '../utils/favourites';
 
 export const CourseCard = ({ course, onPress, style }: { course: any, onPress: any, style: any }) => {
+  const [isFav, setIsFav] = useState(false);
+
+  // Check if course is in favorites when component mounts
+  useEffect(() => {
+    const checkFavoriteStatus = async () => {
+      try {
+        const isCourseFavorite = await isFavorite(course._id);
+        setIsFav(isCourseFavorite);
+      } catch (error) {
+        console.error('Error checking favorite status:', error);
+      }
+    };
+
+    checkFavoriteStatus();
+
+    // Listen for favorites updates
+    const handleFavoritesUpdated = (favorites: any[]) => {
+      const isCourseFavorite = favorites.some(fav => fav._id === course._id);
+      setIsFav(isCourseFavorite);
+    };
+
+    favoritesEmitter.on('favoritesUpdated', handleFavoritesUpdated);
+
+    // Clean up
+    return () => {
+      favoritesEmitter.off('favoritesUpdated', handleFavoritesUpdated);
+    };
+  }, [course._id]);
+
+  // Toggle favorite status
+  const handleToggleFavorite = async (event: any) => {
+    event.stopPropagation(); // Prevent triggering the card's onPress
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await toggleFavorite(course);
+      // No need to update state here as the event listener will handle it
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
+  };
+
   return (
     <TouchableOpacity
       style={[styles.container, style]}
@@ -16,8 +60,23 @@ export const CourseCard = ({ course, onPress, style }: { course: any, onPress: a
       />
 
       <View style={styles.content}>
-        <View style={styles.categoryContainer}>
-          <Text style={styles.category}>{course.categories[0]}</Text>
+        <View style={styles.topSection}>
+          <View style={styles.categoryContainer}>
+            <Text style={styles.category}>{course.categories?.[0] || course.category || 'General'}</Text>
+          </View>
+
+          {/* Favorite Button - Moved inside content */}
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={handleToggleFavorite}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isFav ? "heart" : "heart-outline"}
+              size={22}
+              color={isFav ? "#FF5E5E" : "#FFFFFF"}
+            />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.title} numberOfLines={1}>
@@ -35,7 +94,9 @@ export const CourseCard = ({ course, onPress, style }: { course: any, onPress: a
 
           <View style={styles.rating}>
             <FontAwesome name="star" size={14} color="#FFD700" style={styles.ratingIcon} />
-            <Text style={styles.ratingText}>{course.ratingStats.averageRating?.toFixed(1)}</Text>
+            <Text style={styles.ratingText}>
+              {course.ratingStats?.averageRating?.toFixed(1) || course.rating?.toFixed(1) || '4.5'}
+            </Text>
           </View>
         </View>
       </View>
@@ -69,13 +130,18 @@ const styles = StyleSheet.create({
     padding: 16,
     justifyContent: 'space-between',
   },
+  topSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   categoryContainer: {
     backgroundColor: 'rgba(79, 120, 255, 0.2)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     alignSelf: 'flex-start',
-    marginBottom: 8,
   },
   category: {
     color: '#4F78FF',
@@ -127,6 +193,14 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  favoriteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
