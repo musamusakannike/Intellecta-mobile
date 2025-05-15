@@ -62,6 +62,7 @@ export default function RootLayout() {
         <Stack.Screen name="(pages)/security" options={{ headerShown: false }} />
         <Stack.Screen name="(pages)/help" options={{ headerShown: false }} />
         <Stack.Screen name="(pages)/termsprivacy" options={{ headerShown: false }} />
+        <Stack.Screen name="(pages)/courses" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" options={{ headerShown: false }} />
       </Stack>
     </ToastProvider>
