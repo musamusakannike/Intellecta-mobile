@@ -168,7 +168,6 @@ const useNotifications = () => {
       const data = await response.json()
 
       if (data.status === "success") {
-        console.log("Unread notifications", JSON.stringify(data, null, 2))
         setUnreadCount(data.count)
         return data
       } else {

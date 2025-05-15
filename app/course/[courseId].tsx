@@ -218,7 +218,6 @@ export default function CourseDetails() {
       const data = await response.json()
 
       if (page === 1) {
-        console.log("data.reviews", data.reviews)
         setReviews(data.reviews)
       } else {
         setReviews((prev) => [...prev, ...data.reviews])
