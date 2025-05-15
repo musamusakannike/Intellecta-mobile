@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import { API_ROUTES } from '@/constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as SecureStore from 'expo-secure-store';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 
 interface Notification {
   _id: string;
@@ -116,3 +118,62 @@ export const useNotifications = () => {
     markAllAsRead
   };
 };
+
+// Register for push notifications and send token to backend
+const useRegisterPushNotifications = () => {
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      let isDevice = Platform.OS !== 'web';
+      if (isDevice) {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        if (finalStatus !== 'granted') {
+          return;
+        }
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        const expoPushToken = tokenData.data;
+        // Send token to backend
+        const token = await SecureStore.getItemAsync('token');
+        if (token && expoPushToken) {
+          await fetch(API_ROUTES.USERS.EXPO_PUSH_TOKEN || '/api/v1/users/expo-push-token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ expoPushToken })
+          });
+        }
+      }
+      if (Platform.OS === 'android') {
+        Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      }
+    })();
+
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      // Handle notification received in foreground
+    });
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      // Handle notification tap
+    });
+    return () => {
+      if (notificationListener.current) notificationListener.current.remove();
+      if (responseListener.current) responseListener.current.remove();
+    };
+  }, []);
+};
+
+export { useRegisterPushNotifications };
+

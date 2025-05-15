@@ -13,6 +13,7 @@ export const API_ROUTES = {
     UPDATE_USER: `${API_URL}/users/me`,
     DELETE_USER: `${API_URL}/users/me`,
     UPDATE_PROFILE: `${API_URL}/users/me/`,
+    EXPO_PUSH_TOKEN: `${API_URL}/users/expo-push-token`,
   },
   COURSES: {
     GET_COURSES: `${API_URL}/courses`,
