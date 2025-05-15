@@ -1,41 +1,37 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  StatusBar,
-  RefreshControl,
-  Dimensions,
-  Platform,
-  SafeAreaView,
-  Animated as RNAnimated,
-  FlatList
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { ToastContext } from "@/components/Toast/ToastContext";
-import * as Haptics from 'expo-haptics';
 import { Skeleton } from "@/components/Skeleton";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ToastContext } from "@/components/Toast/ToastContext";
+import { API_ROUTES } from '@/constants';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import {
+  Dimensions,
+  FlatList,
+  RefreshControl,
+  Animated as RNAnimated,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  interpolate,
   Extrapolate,
   FadeIn,
   FadeOut,
-  SlideInRight
+  interpolate,
+  SlideInRight,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring
 } from 'react-native-reanimated';
-import { API_ROUTES } from '@/constants';
-import { PanGestureHandler } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
