@@ -125,55 +125,83 @@ const useRegisterPushNotifications = () => {
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
-    (async () => {
-      let isDevice = Platform.OS !== 'web';
-      if (isDevice) {
+    const registerForPushNotifications = async () => {
+      try {
+        if (Platform.OS === 'web') {
+          console.warn('Push notifications are not supported on web');
+          return;
+        }
+
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
+
         if (existingStatus !== 'granted') {
           const { status } = await Notifications.requestPermissionsAsync();
           finalStatus = status;
         }
+
         if (finalStatus !== 'granted') {
+          console.warn('Push notification permissions not granted');
           return;
         }
+
         const tokenData = await Notifications.getExpoPushTokenAsync();
         const expoPushToken = tokenData.data;
-        // Send token to backend
-        const token = await SecureStore.getItemAsync('token');
-        if (token && expoPushToken) {
-          await fetch(API_ROUTES.USERS.EXPO_PUSH_TOKEN || '/api/v1/users/expo-push-token', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ expoPushToken })
+
+        if (expoPushToken) {
+          const token = await SecureStore.getItemAsync('token');
+          if (token) {
+            await fetch(API_ROUTES.USERS.EXPO_PUSH_TOKEN, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ expoPushToken })
+            });
+          }
+        }
+
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF231F7C',
           });
         }
+      } catch (error) {
+        console.error('Failed to register for push notifications:', error);
       }
-      if (Platform.OS === 'android') {
-        Notifications.setNotificationChannelAsync('default', {
-          name: 'default',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#FF231F7C',
-        });
-      }
-    })();
+    };
 
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      // Handle notification received in foreground
-    });
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      // Handle notification tap
-    });
+    registerForPushNotifications();
+
+    try {
+      notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+        console.log('Notification received:', notification);
+        // Handle it
+      });
+
+      responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+        console.log('Notification clicked:', response);
+        // Handle response
+      });
+    } catch (error) {
+      console.error('Failed to register notification listeners:', error);
+    }
+
     return () => {
-      if (notificationListener.current) notificationListener.current.remove();
-      if (responseListener.current) responseListener.current.remove();
+      try {
+        notificationListener.current?.remove();
+        responseListener.current?.remove();
+      } catch (error) {
+        console.error('Error cleaning up notification listeners:', error);
+      }
     };
   }, []);
 };
+
 
 export { useRegisterPushNotifications };
 
