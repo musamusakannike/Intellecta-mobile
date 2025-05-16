@@ -5,14 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   StatusBar,
   Dimensions,
-  Platform,
   SafeAreaView,
-  Alert,
-  FlatList,
   TextInput,
   Linking
 } from 'react-native';
@@ -20,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { Ionicons, MaterialIcons, FontAwesome5, AntDesign, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { ToastContext } from "@/components/Toast/ToastContext";
 import * as Haptics from 'expo-haptics';
 import { Skeleton } from "@/components/Skeleton";
@@ -30,20 +26,14 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  interpolate,
-  Extrapolate,
   FadeIn,
-  FadeOut,
-  SlideInRight,
-  SlideInUp
 } from 'react-native-reanimated';
 import { API_ROUTES } from '@/constants';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import * as Progress from 'react-native-progress';
-import { PanGestureHandler } from 'react-native-gesture-handler';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import LatexRenderer from '@/components/LatexRenderer';
-import { ResizeMode, Video } from 'expo-av';
+import { Video } from 'expo-av';
 import * as Speech from 'expo-speech';
 import CodeBlockViewer from '@/components/CodeBlockViewer';
 import CachedImage from '@/components/CachedImage';
@@ -51,7 +41,7 @@ import CachedImage from '@/components/CachedImage';
 const { width, height } = Dimensions.get('window');
 
 interface LessonContent {
-  type: 'text' | 'image' | 'code' | 'latex' | 'link' | 'video' | 'youtubeUrl';
+  type: 'text' | 'image' | 'code' | 'latex' | 'link' | 'youtubeUrl';
   content: string;
   order: number;
   _id: string;
@@ -110,7 +100,6 @@ export default function LessonExperience() {
   const { lessonId } = useLocalSearchParams();
   const scrollRef = useRef<ScrollView>(null);
   const confettiRef = useRef<any>(null);
-  const videoRef = useRef<Video>(null);
 
   const progressValue = useSharedValue(0);
   const quizSheetPosition = useSharedValue(height);
@@ -694,45 +683,6 @@ export default function LessonExperience() {
               </View>
               <Ionicons name="open-outline" size={20} color="#B4C6EF" />
             </TouchableOpacity>
-
-            {hasNote && (
-              <TouchableOpacity
-                style={styles.savedNoteContainer}
-                onPress={toggleNotes}
-                activeOpacity={0.8}
-              >
-                <View style={styles.savedNoteHeader}>
-                  <Ionicons name="document-text" size={18} color="#4F78FF" />
-                  <Text style={styles.savedNoteTitle}>Your Note</Text>
-                </View>
-                <Text style={styles.savedNoteText} numberOfLines={3}>
-                  {savedNotes[contentId]}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </Animated.View>
-        );
-
-      case 'video':
-        return (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            style={styles.contentContainer}
-          >
-            <View style={styles.videoContainer}>
-              <Video
-                ref={videoRef}
-                source={{ uri: content.content }}
-                rate={1.0}
-                volume={1.0}
-                isMuted={false}
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay={false}
-                isLooping={false}
-                style={styles.video}
-                useNativeControls
-              />
-            </View>
 
             {hasNote && (
               <TouchableOpacity
