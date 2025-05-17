@@ -1,41 +1,42 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  StatusBar,
-  Dimensions,
-  SafeAreaView,
-  TextInput,
-  Linking
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import { Ionicons } from '@expo/vector-icons';
-import { ToastContext } from "@/components/Toast/ToastContext";
-import * as Haptics from 'expo-haptics';
+import CachedImage from '@/components/CachedImage';
+import CodeBlockViewer from '@/components/CodeBlockViewer';
+import LatexRenderer from '@/components/LatexRenderer';
 import { Skeleton } from "@/components/Skeleton";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ToastContext } from "@/components/Toast/ToastContext";
+import { API_ROUTES } from '@/constants';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ScreenCapture from 'expo-screen-capture';
+import * as SecureStore from 'expo-secure-store';
+import * as Speech from 'expo-speech';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Linking,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import ConfettiCannon from 'react-native-confetti-cannon';
+import * as Progress from 'react-native-progress';
 import Animated, {
-  useSharedValue,
+  FadeIn,
   useAnimatedStyle,
+  useSharedValue,
   withSpring,
   withTiming,
-  FadeIn,
 } from 'react-native-reanimated';
-import { API_ROUTES } from '@/constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import YoutubePlayer from 'react-native-youtube-iframe';
-import * as Progress from 'react-native-progress';
-import ConfettiCannon from 'react-native-confetti-cannon';
-import LatexRenderer from '@/components/LatexRenderer';
-import * as Speech from 'expo-speech';
-import CodeBlockViewer from '@/components/CodeBlockViewer';
-import CachedImage from '@/components/CachedImage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -188,6 +189,34 @@ export default function LessonExperience() {
       saveProgress();
     }
   }, [currentContentIndex, lesson]);
+
+  useEffect(() => {
+    // Prevent screen capture on android
+    ScreenCapture.preventScreenCaptureAsync();
+    // Listen for screenshots on iOS
+    const subscribe = ScreenCapture.addScreenshotListener(async () => {
+      try {
+        console.log('Screenshot detected');
+        const token = await SecureStore.getItemAsync('token');
+        if (!token) { router.replace('/auth/login'); return; }
+        // Report screenshot to server;
+        await fetch('https://intellecta-server-h5ug.onrender.com/api/v1/users/screenshot', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        toast?.showToast({
+          type: 'warning',
+          message: 'Screenshot detected and reported for security.'
+        });
+      } catch (err) {
+        console.error('Error reporting screenshot:', err);
+      }
+    });
+    return () => subscribe.remove();
+  }, []);
 
   const handleBackPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
