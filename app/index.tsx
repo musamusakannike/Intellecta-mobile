@@ -1,39 +1,39 @@
 "use client"
 
-import React, { useState, useEffect, useContext, useCallback } from "react"
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  TextInput,
-  FlatList,
-  Dimensions,
-  StatusBar,
-  SafeAreaView,
-  type NativeSyntheticEvent,
-  type NativeScrollEvent,
-  Platform,
-  ActivityIndicator,
-} from "react-native"
+import { API_ROUTES } from "@/constants"
+import { AntDesign, Ionicons } from "@expo/vector-icons"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import CommunityNetInfo from '@react-native-community/netinfo'
+import * as Haptics from "expo-haptics"
 import { LinearGradient } from "expo-linear-gradient"
 import { type RelativePathString, useRouter } from "expo-router"
-import AsyncStorage from "@react-native-async-storage/async-storage"
 import * as SecureStore from "expo-secure-store"
-import { Ionicons, AntDesign } from "@expo/vector-icons"
-import { ToastContext } from "../components/Toast/ToastContext"
-import * as Haptics from "expo-haptics"
-import { Skeleton } from "../components/Skeleton"
+import React, { useCallback, useContext, useEffect, useState } from "react"
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Platform,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native"
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Avatar } from "../components/Avatar"
 import { CourseCard } from "../components/CourseCard"
-import { Pagination } from "../components/Pagination"
 import { NotificationBadge } from "../components/NotificationBadge"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from "react-native-reanimated"
-import { API_ROUTES } from "@/constants"
-import CommunityNetInfo from '@react-native-community/netinfo';
+import { Pagination } from "../components/Pagination"
+import { Skeleton } from "../components/Skeleton"
+import { ToastContext } from "../components/Toast/ToastContext"
 
 const { width } = Dimensions.get("window")
 
@@ -345,8 +345,19 @@ export default function Dashboard() {
         setToken(storedToken)
 
         if (!storedToken) {
-          router.replace("/auth/login")
-          return
+          try {
+            await router.replace("/auth/login");
+            // Optionally, set a state like setIsRedirecting(true) to show a spinner
+          } catch (err) {
+            // Show a fallback UI or error message
+            toast?.showToast({
+              type: "error",
+              message: "Navigation failed. Please restart the app.",
+            });
+            // Optionally, force reload as a last resort
+            // window.location.reload(); // Only works on web
+          }
+          return;
         }
 
         const storedUsername = await AsyncStorage.getItem("username")
