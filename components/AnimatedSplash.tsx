@@ -9,7 +9,6 @@ import {
   Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import LottieView from "lottie-react-native";
 
 const { width, height } = Dimensions.get("window");
 
@@ -81,17 +80,6 @@ export default function EnhancedSplash({ onFinish }: { onFinish: () => void }) {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        {/* Particle animation in background */}
-        {/* <View style={styles.lottieContainer}>
-          <LottieView
-            ref={lottieRef}
-            source={particleAnimation}
-            style={styles.lottie}
-            autoPlay
-            loop
-          />
-        </View> */}
-
         <View style={styles.contentContainer}>
           {/* Main logo/text */}
           <Animated.View

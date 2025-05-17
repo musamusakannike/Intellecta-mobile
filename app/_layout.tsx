@@ -2,30 +2,54 @@ import AnimatedSplash from "@/components/AnimatedSplash";
 import ToastProvider from "@/components/Toast/ToastProvider";
 import { Stack, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 
 export default function RootLayout() {
   const [isSplashReady, setIsSplashReady] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null); // null while checking
+  const hasNavigatedRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkAuthToken = async () => {
       try {
         const token = await SecureStore.getItemAsync('token');
-        setHasToken(!!token);
+
+        // Simulate timeout fallback (e.g., 5s max wait)
+        if (isMounted) {
+          setHasToken(!!token);
+        }
       } catch (error) {
         console.error('Error checking auth token:', error);
-        setHasToken(false);
+        if (isMounted) {
+          setHasToken(false);
+        }
       }
     };
 
     checkAuthToken();
+
+    // Safety timeout to avoid indefinite loading
+    const timeout = setTimeout(() => {
+      if (isMounted && hasToken === null) {
+        console.log("Token check timeout reached. Proceeding without token.");
+        setHasToken(false);
+      }
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
   }, []);
 
   useEffect(() => {
-    if (isSplashReady && hasToken !== null) {
-      // Navigate based on token presence
+    if (isSplashReady && hasToken !== null && !hasNavigatedRef.current) {
+      hasNavigatedRef.current = true; // Prevent multiple navigations
+
       if (!hasToken) {
         router.replace('/auth/login');
       } else {
@@ -38,9 +62,13 @@ export default function RootLayout() {
     return <AnimatedSplash onFinish={() => setIsSplashReady(true)} />;
   }
 
-  // Return empty fragment while checking auth state
   if (hasToken === null) {
-    return null;
+    // Fallback UI instead of null
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: "#111827" }}>
+        <ActivityIndicator size="large" color={"#fff"} />
+      </View>
+    );
   }
 
   return (
