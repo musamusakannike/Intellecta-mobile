@@ -1,12 +1,10 @@
 import AnimatedSplash from "@/components/AnimatedSplash";
 import ToastProvider from "@/components/Toast/ToastProvider";
-import { useRegisterPushNotifications } from '@/hooks/useNotifications';
 import { Stack, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from "react";
 
 export default function RootLayout() {
-  useRegisterPushNotifications();
   const [isSplashReady, setIsSplashReady] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null); // null while checking
   const router = useRouter();
