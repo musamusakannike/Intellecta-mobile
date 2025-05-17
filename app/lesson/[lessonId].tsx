@@ -33,7 +33,6 @@ import YoutubePlayer from 'react-native-youtube-iframe';
 import * as Progress from 'react-native-progress';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import LatexRenderer from '@/components/LatexRenderer';
-import { Video } from 'expo-av';
 import * as Speech from 'expo-speech';
 import CodeBlockViewer from '@/components/CodeBlockViewer';
 import CachedImage from '@/components/CachedImage';
