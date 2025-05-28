@@ -433,8 +433,6 @@ export default function Dashboard() {
         if (response.ok) {
           setFilteredCourses(data.courses)
           setPagination(data.pagination)
-
-          console.log("Fetched courses:", JSON.stringify(data.courses, null, 2))
         } else {
           toast?.showToast({
             type: "error",

@@ -40,7 +40,6 @@ export default function RootLayout() {
     // Safety timeout to avoid indefinite loading
     const timeout = setTimeout(() => {
       if (isMounted && hasToken === null) {
-        console.log("Token check timeout reached. Proceeding without token.");
         setHasToken(false);
       }
     }, 5000);

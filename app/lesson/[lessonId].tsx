@@ -49,6 +49,14 @@ interface LessonContent {
   title?: string; // For links
 }
 
+interface ContentGroup {
+  _id: string;
+  title: string;
+  description?: string;
+  contents: LessonContent[];
+  order: number;
+}
+
 interface QuizQuestion {
   question: string;
   options: string[];
@@ -62,7 +70,7 @@ interface Lesson {
   title: string;
   description: string;
   topic: string;
-  contents: LessonContent[];
+  contentGroups: ContentGroup[];
   quiz: QuizQuestion[];
   order: number;
   isActive: boolean;
@@ -74,7 +82,7 @@ interface Lesson {
 export default function LessonExperience() {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentContentIndex, setCurrentContentIndex] = useState(0);
+  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
@@ -84,14 +92,15 @@ export default function LessonExperience() {
     userProgress: any;
   } | null>(null);
   const [showExplanation, setShowExplanation] = useState<string | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
-  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [videoReady, setVideoReady] = useState<{ [key: string]: boolean }>({});
+  const [videoPlaying, setVideoPlaying] = useState<{ [key: string]: boolean }>({});
   const [showConfetti, setShowConfetti] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [showNotes, setShowNotes] = useState(false);
   const [savedNotes, setSavedNotes] = useState<{ [key: string]: string }>({});
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedContentForNote, setSelectedContentForNote] = useState<string | null>(null);
 
   const toast = useContext(ToastContext);
   const router = useRouter();
@@ -146,8 +155,8 @@ export default function LessonExperience() {
       const progress = await AsyncStorage.getItem(`lesson_progress_${lessonId}`);
       if (progress) {
         const progressIndex = parseInt(progress, 10);
-        setCurrentContentIndex(progressIndex);
-        progressValue.value = progressIndex / (lessonData.contents.length - 1);
+        setCurrentGroupIndex(progressIndex);
+        progressValue.value = progressIndex / (lessonData.contentGroups.length - 1);
       }
 
     } catch (error) {
@@ -172,20 +181,20 @@ export default function LessonExperience() {
     };
   }, [lessonId, isSpeaking, fetchLessonData]);
 
-  // Save progress when content index changes
+  // Save progress when group index changes
   useEffect(() => {
-    if (lesson && lesson.contents.length > 0) {
+    if (lesson && lesson.contentGroups.length > 0) {
       const saveProgress = async () => {
-        await AsyncStorage.setItem(`lesson_progress_${lessonId}`, currentContentIndex.toString());
+        await AsyncStorage.setItem(`lesson_progress_${lessonId}`, currentGroupIndex.toString());
 
         // Update progress bar
-        const newProgress = currentContentIndex / (lesson.contents.length - 1);
+        const newProgress = currentGroupIndex / (lesson.contentGroups.length - 1);
         progressValue.value = withTiming(newProgress, { duration: 300 });
       };
 
       saveProgress();
     }
-  }, [currentContentIndex, lesson, lessonId, progressValue]);
+  }, [currentGroupIndex, lesson, lessonId, progressValue]);
 
   useEffect(() => {
     // Prevent screen capture on android
@@ -193,7 +202,6 @@ export default function LessonExperience() {
     // Listen for screenshots on iOS
     const subscribe = ScreenCapture.addScreenshotListener(async () => {
       try {
-        console.log('Screenshot detected');
         const token = await SecureStore.getItemAsync('token');
         if (!token) { router.replace('/auth/login'); return; }
         // Report screenshot to server;
@@ -227,7 +235,7 @@ export default function LessonExperience() {
     router.back();
   };
 
-  const navigateToContent = (index: number) => {
+  const navigateToGroup = (index: number) => {
     if (!lesson) return;
 
     // Stop speech if active
@@ -238,20 +246,20 @@ export default function LessonExperience() {
 
     if (index < 0) {
       index = 0;
-    } else if (index >= lesson.contents.length) {
-      // If we've reached the end of the content, show the quiz
+    } else if (index >= lesson.contentGroups.length) {
+      // If we've reached the end of the content groups, show the quiz
       if (lesson.quiz && lesson.quiz.length > 0) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         openQuiz();
         return;
       } else {
-        // If there's no quiz, go back to the last content
-        index = lesson.contents.length - 1;
+        // If there's no quiz, go back to the last group
+        index = lesson.contentGroups.length - 1;
       }
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCurrentContentIndex(index);
+    setCurrentGroupIndex(index);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -271,15 +279,15 @@ export default function LessonExperience() {
     setTimeout(() => setShowQuiz(false), 300);
   };
 
-  const toggleNotes = () => {
+  const toggleNotes = (contentId?: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     if (showNotes) {
       notesSheetPosition.value = withSpring(height, { damping: 20, stiffness: 90 });
       setTimeout(() => setShowNotes(false), 300);
     } else {
-      if (lesson) {
-        const contentId = lesson.contents[currentContentIndex]._id;
+      if (contentId) {
+        setSelectedContentForNote(contentId);
         const existingNote = savedNotes[contentId] || '';
         setNoteText(existingNote);
       }
@@ -290,9 +298,7 @@ export default function LessonExperience() {
   };
 
   const saveNote = async () => {
-    if (!lesson) return;
-
-    const contentId = lesson.contents[currentContentIndex]._id;
+    if (!lesson || !selectedContentForNote) return;
 
     if (!noteText.trim()) {
       // If note is empty, show delete confirmation
@@ -304,7 +310,7 @@ export default function LessonExperience() {
 
     const updatedNotes = {
       ...savedNotes,
-      [contentId]: noteText
+      [selectedContentForNote]: noteText
     };
 
     setSavedNotes(updatedNotes);
@@ -319,12 +325,10 @@ export default function LessonExperience() {
   };
 
   const showDeleteNoteConfirmation = () => {
-    if (!lesson) return;
-
-    const contentId = lesson.contents[currentContentIndex]._id;
+    if (!selectedContentForNote) return;
 
     // Only show delete confirmation if there's an existing note
-    if (savedNotes[contentId]) {
+    if (savedNotes[selectedContentForNote]) {
       setShowDeleteConfirm(true);
       deleteConfirmPosition.value = withSpring(0, { damping: 20, stiffness: 90 });
     } else {
@@ -339,13 +343,12 @@ export default function LessonExperience() {
   };
 
   const deleteNote = async () => {
-    if (!lesson) return;
+    if (!selectedContentForNote) return;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    const contentId = lesson.contents[currentContentIndex]._id;
     const updatedNotes = { ...savedNotes };
-    delete updatedNotes[contentId];
+    delete updatedNotes[selectedContentForNote];
 
     setSavedNotes(updatedNotes);
     await AsyncStorage.setItem(`lesson_notes_${lessonId}`, JSON.stringify(updatedNotes));
@@ -359,11 +362,7 @@ export default function LessonExperience() {
     toggleNotes();
   };
 
-  const toggleSpeech = () => {
-    if (!lesson) return;
-
-    const content = lesson.contents[currentContentIndex];
-
+  const toggleSpeech = (content: LessonContent) => {
     if (content.type !== 'text') {
       toast?.showToast({
         type: 'info',
@@ -398,7 +397,6 @@ export default function LessonExperience() {
           });
         }
       });
-
 
       toast?.showToast({
         type: 'info',
@@ -539,68 +537,76 @@ export default function LessonExperience() {
     </View>
   );
 
-  // Render content based on type
-  const renderContent = () => {
-    if (!lesson || !lesson.contents[currentContentIndex]) return null;
-
-    const content = lesson.contents[currentContentIndex];
+  // Render individual content item
+  const renderContentItem = (content: LessonContent, groupId: string) => {
     const contentId = content._id;
     const hasNote = savedNotes[contentId] !== undefined;
 
     switch (content.type) {
       case 'text':
         return (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            style={styles.contentContainer}
-          >
+          <View key={contentId} style={styles.contentItem}>
             <Text style={styles.contentText}>{content.content}</Text>
+
+            <View style={styles.contentActions}>
+              <TouchableOpacity
+                style={[
+                  styles.textToSpeechButton,
+                  isSpeaking && styles.textToSpeechButtonActive
+                ]}
+                onPress={() => toggleSpeech(content)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={isSpeaking ? "volume-high" : "volume-medium"}
+                  size={16}
+                  color={isSpeaking ? "#FFFFFF" : "#4F78FF"}
+                />
+                <Text style={[
+                  styles.textToSpeechText,
+                  isSpeaking && styles.textToSpeechTextActive
+                ]}>
+                  {isSpeaking ? "Stop" : "Read"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.noteButton, hasNote && styles.noteButtonActive]}
+                onPress={() => toggleNotes(contentId)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={hasNote ? "document-text" : "create-outline"}
+                  size={16}
+                  color={hasNote ? "#4F78FF" : "#B4C6EF"}
+                />
+                <Text style={[styles.noteButtonText, hasNote && styles.noteButtonTextActive]}>
+                  {hasNote ? "Note" : "Add Note"}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {hasNote && (
               <TouchableOpacity
                 style={styles.savedNoteContainer}
-                onPress={toggleNotes}
+                onPress={() => toggleNotes(contentId)}
                 activeOpacity={0.8}
               >
                 <View style={styles.savedNoteHeader}>
-                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Ionicons name="document-text" size={16} color="#4F78FF" />
                   <Text style={styles.savedNoteTitle}>Your Note</Text>
                 </View>
-                <Text style={styles.savedNoteText} numberOfLines={3}>
+                <Text style={styles.savedNoteText} numberOfLines={2}>
                   {savedNotes[contentId]}
                 </Text>
               </TouchableOpacity>
             )}
-
-            <TouchableOpacity
-              style={[
-                styles.textToSpeechButton,
-                isSpeaking && styles.textToSpeechButtonActive
-              ]}
-              onPress={toggleSpeech}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={isSpeaking ? "volume-high" : "volume-medium"}
-                size={18}
-                color={isSpeaking ? "#FFFFFF" : "#4F78FF"}
-              />
-              <Text style={[
-                styles.textToSpeechText,
-                isSpeaking && styles.textToSpeechTextActive
-              ]}>
-                {isSpeaking ? "Stop Reading" : "Read Aloud"}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
+          </View>
         );
 
       case 'image':
         return (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            style={styles.contentContainer}
-          >
+          <View key={contentId} style={styles.contentItem}>
             <View style={styles.imageContainer}>
               <CachedImage
                 source={content.content}
@@ -609,134 +615,191 @@ export default function LessonExperience() {
               />
             </View>
 
+            <View style={styles.contentActions}>
+              <TouchableOpacity
+                style={[styles.noteButton, hasNote && styles.noteButtonActive]}
+                onPress={() => toggleNotes(contentId)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={hasNote ? "document-text" : "create-outline"}
+                  size={16}
+                  color={hasNote ? "#4F78FF" : "#B4C6EF"}
+                />
+                <Text style={[styles.noteButtonText, hasNote && styles.noteButtonTextActive]}>
+                  {hasNote ? "Note" : "Add Note"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {hasNote && (
               <TouchableOpacity
                 style={styles.savedNoteContainer}
-                onPress={toggleNotes}
+                onPress={() => toggleNotes(contentId)}
                 activeOpacity={0.8}
               >
                 <View style={styles.savedNoteHeader}>
-                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Ionicons name="document-text" size={16} color="#4F78FF" />
                   <Text style={styles.savedNoteTitle}>Your Note</Text>
                 </View>
-                <Text style={styles.savedNoteText} numberOfLines={3}>
+                <Text style={styles.savedNoteText} numberOfLines={2}>
                   {savedNotes[contentId]}
                 </Text>
               </TouchableOpacity>
             )}
-          </Animated.View>
+          </View>
         );
 
       case 'code':
         return (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            style={styles.contentContainer}
-          >
+          <View key={contentId} style={styles.contentItem}>
             <View style={styles.codeContainer}>
               <CodeBlockViewer
                 code={content.content}
                 language={content.language || 'javascript'}
                 theme="dark"
-                fontSize={34}
+                fontSize={32}
               />
+            </View>
+
+            <View style={styles.contentActions}>
+              <TouchableOpacity
+                style={[styles.noteButton, hasNote && styles.noteButtonActive]}
+                onPress={() => toggleNotes(contentId)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={hasNote ? "document-text" : "create-outline"}
+                  size={16}
+                  color={hasNote ? "#4F78FF" : "#B4C6EF"}
+                />
+                <Text style={[styles.noteButtonText, hasNote && styles.noteButtonTextActive]}>
+                  {hasNote ? "Note" : "Add Note"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {hasNote && (
               <TouchableOpacity
                 style={styles.savedNoteContainer}
-                onPress={toggleNotes}
+                onPress={() => toggleNotes(contentId)}
                 activeOpacity={0.8}
               >
                 <View style={styles.savedNoteHeader}>
-                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Ionicons name="document-text" size={16} color="#4F78FF" />
                   <Text style={styles.savedNoteTitle}>Your Note</Text>
                 </View>
-                <Text style={styles.savedNoteText} numberOfLines={3}>
+                <Text style={styles.savedNoteText} numberOfLines={2}>
                   {savedNotes[contentId]}
                 </Text>
               </TouchableOpacity>
             )}
-          </Animated.View>
+          </View>
         );
 
       case 'latex':
         return (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            style={styles.contentContainer}
-          >
+          <View key={contentId} style={styles.contentItem}>
             <View style={styles.latexContainer}>
               <LatexRenderer latex={content.content} />
+            </View>
+
+            <View style={styles.contentActions}>
+              <TouchableOpacity
+                style={[styles.noteButton, hasNote && styles.noteButtonActive]}
+                onPress={() => toggleNotes(contentId)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={hasNote ? "document-text" : "create-outline"}
+                  size={16}
+                  color={hasNote ? "#4F78FF" : "#B4C6EF"}
+                />
+                <Text style={[styles.noteButtonText, hasNote && styles.noteButtonTextActive]}>
+                  {hasNote ? "Note" : "Add Note"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {hasNote && (
               <TouchableOpacity
                 style={styles.savedNoteContainer}
-                onPress={toggleNotes}
+                onPress={() => toggleNotes(contentId)}
                 activeOpacity={0.8}
               >
                 <View style={styles.savedNoteHeader}>
-                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Ionicons name="document-text" size={16} color="#4F78FF" />
                   <Text style={styles.savedNoteTitle}>Your Note</Text>
                 </View>
-                <Text style={styles.savedNoteText} numberOfLines={3}>
+                <Text style={styles.savedNoteText} numberOfLines={2}>
                   {savedNotes[contentId]}
                 </Text>
               </TouchableOpacity>
             )}
-          </Animated.View>
+          </View>
         );
 
       case 'link':
         return (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            style={styles.contentContainer}
-          >
+          <View key={contentId} style={styles.contentItem}>
             <TouchableOpacity
               style={styles.linkContainer}
               onPress={() => openLink(content.content)}
               activeOpacity={0.7}
             >
               <View style={styles.linkContent}>
-                <Ionicons name="link" size={24} color="#4F78FF" style={styles.linkIcon} />
+                <Ionicons name="link" size={20} color="#4F78FF" style={styles.linkIcon} />
                 <View style={styles.linkTextContainer}>
                   <Text style={styles.linkTitle}>{content.title || 'External Resource'}</Text>
                   <Text style={styles.linkUrl} numberOfLines={1}>{content.content}</Text>
                 </View>
               </View>
-              <Ionicons name="open-outline" size={20} color="#B4C6EF" />
+              <Ionicons name="open-outline" size={18} color="#B4C6EF" />
             </TouchableOpacity>
+
+            <View style={styles.contentActions}>
+              <TouchableOpacity
+                style={[styles.noteButton, hasNote && styles.noteButtonActive]}
+                onPress={() => toggleNotes(contentId)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={hasNote ? "document-text" : "create-outline"}
+                  size={16}
+                  color={hasNote ? "#4F78FF" : "#B4C6EF"}
+                />
+                <Text style={[styles.noteButtonText, hasNote && styles.noteButtonTextActive]}>
+                  {hasNote ? "Note" : "Add Note"}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {hasNote && (
               <TouchableOpacity
                 style={styles.savedNoteContainer}
-                onPress={toggleNotes}
+                onPress={() => toggleNotes(contentId)}
                 activeOpacity={0.8}
               >
                 <View style={styles.savedNoteHeader}>
-                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Ionicons name="document-text" size={16} color="#4F78FF" />
                   <Text style={styles.savedNoteTitle}>Your Note</Text>
                 </View>
-                <Text style={styles.savedNoteText} numberOfLines={3}>
+                <Text style={styles.savedNoteText} numberOfLines={2}>
                   {savedNotes[contentId]}
                 </Text>
               </TouchableOpacity>
             )}
-          </Animated.View>
+          </View>
         );
 
       case 'youtubeUrl':
         const videoId = extractYoutubeId(content.content);
+        const videoKey = `${groupId}_${contentId}`;
 
         return (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            style={styles.contentContainer}
-          >
+          <View key={contentId} style={styles.contentItem}>
             <View style={styles.videoContainer}>
-              {!videoReady && (
+              {!videoReady[videoKey] && (
                 <View style={styles.videoLoading}>
                   <ActivityIndicator size="large" color="#4F78FF" />
                   <Text style={styles.videoLoadingText}>Loading video...</Text>
@@ -745,49 +808,92 @@ export default function LessonExperience() {
 
               {videoId && (
                 <YoutubePlayer
-                  height={220}
-                  play={videoPlaying}
+                  height={200}
+                  play={videoPlaying[videoKey] || false}
                   videoId={videoId}
-                  onReady={() => setVideoReady(true)}
+                  onReady={() => setVideoReady(prev => ({ ...prev, [videoKey]: true }))}
                   onChangeState={(state: any) => {
                     if (state === 'playing') {
-                      setVideoPlaying(true);
+                      setVideoPlaying(prev => ({ ...prev, [videoKey]: true }));
                     } else if (state === 'paused' || state === 'ended') {
-                      setVideoPlaying(false);
+                      setVideoPlaying(prev => ({ ...prev, [videoKey]: false }));
                     }
                   }}
                 />
               )}
             </View>
 
+            <View style={styles.contentActions}>
+              <TouchableOpacity
+                style={[styles.noteButton, hasNote && styles.noteButtonActive]}
+                onPress={() => toggleNotes(contentId)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={hasNote ? "document-text" : "create-outline"}
+                  size={16}
+                  color={hasNote ? "#4F78FF" : "#B4C6EF"}
+                />
+                <Text style={[styles.noteButtonText, hasNote && styles.noteButtonTextActive]}>
+                  {hasNote ? "Note" : "Add Note"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {hasNote && (
               <TouchableOpacity
                 style={styles.savedNoteContainer}
-                onPress={toggleNotes}
+                onPress={() => toggleNotes(contentId)}
                 activeOpacity={0.8}
               >
                 <View style={styles.savedNoteHeader}>
-                  <Ionicons name="document-text" size={18} color="#4F78FF" />
+                  <Ionicons name="document-text" size={16} color="#4F78FF" />
                   <Text style={styles.savedNoteTitle}>Your Note</Text>
                 </View>
-                <Text style={styles.savedNoteText} numberOfLines={3}>
+                <Text style={styles.savedNoteText} numberOfLines={2}>
                   {savedNotes[contentId]}
                 </Text>
               </TouchableOpacity>
             )}
-          </Animated.View>
+          </View>
         );
 
       default:
         return (
-          <View style={styles.contentContainer}>
+          <View key={contentId} style={styles.contentItem}>
             <Text style={styles.contentText}>Unsupported content type: {content.type}</Text>
           </View>
         );
     }
   };
 
-  // Render quiz
+  // Render content group
+  const renderContentGroup = () => {
+    if (!lesson || !lesson.contentGroups[currentGroupIndex]) return null;
+
+    const currentGroup = lesson.contentGroups[currentGroupIndex];
+    const sortedContents = [...currentGroup.contents].sort((a, b) => a.order - b.order);
+
+    return (
+      <Animated.View
+        entering={FadeIn.duration(300)}
+        style={styles.contentGroupContainer}
+      >
+        <View style={styles.groupHeader}>
+          <Text style={styles.groupTitle}>{currentGroup.title}</Text>
+          {currentGroup.description && (
+            <Text style={styles.groupDescription}>{currentGroup.description}</Text>
+          )}
+        </View>
+
+        <View style={styles.groupContents}>
+          {sortedContents.map((content) => renderContentItem(content, currentGroup._id))}
+        </View>
+      </Animated.View>
+    );
+  };
+
+  // Render quiz (same as before)
   const renderQuiz = () => {
     if (!lesson || !lesson.quiz) return null;
 
@@ -998,10 +1104,9 @@ export default function LessonExperience() {
 
   // Render notes sheet
   const renderNotesSheet = () => {
-    if (!lesson) return null;
+    if (!selectedContentForNote) return null;
 
-    const contentId = lesson.contents[currentContentIndex]._id;
-    const existingNote = savedNotes[contentId] || '';
+    const existingNote = savedNotes[selectedContentForNote] || '';
     const hasExistingNote = existingNote.length > 0;
 
     return (
@@ -1015,14 +1120,14 @@ export default function LessonExperience() {
           <View style={styles.notesHeader}>
             <TouchableOpacity
               style={styles.notesCloseButton}
-              onPress={toggleNotes}
+              onPress={() => toggleNotes()}
               activeOpacity={0.7}
             >
               <Ionicons name="close" size={24} color="#FFFFFF" />
             </TouchableOpacity>
             <Text style={styles.notesTitle}>Your Notes</Text>
             <Text style={styles.notesSubtitle}>
-              Take notes for this section
+              Take notes for this content
             </Text>
           </View>
 
@@ -1146,35 +1251,10 @@ export default function LessonExperience() {
 
               <View style={styles.progressInfo}>
                 <Text style={styles.progressText}>
-                  {currentContentIndex + 1}/{lesson.contents.length}
+                  {currentGroupIndex + 1}/{lesson.contentGroups.length}
                 </Text>
 
                 <View style={styles.headerActions}>
-                  {lesson.contents[currentContentIndex]?.type === 'text' && (
-                    <TouchableOpacity
-                      style={[
-                        styles.actionButton,
-                        isSpeaking && styles.actionButtonActive
-                      ]}
-                      onPress={toggleSpeech}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={isSpeaking ? "volume-high" : "volume-medium"}
-                        size={22}
-                        color={isSpeaking ? "#4F78FF" : "#FFFFFF"}
-                      />
-                    </TouchableOpacity>
-                  )}
-
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={toggleNotes}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="create-outline" size={22} color="#FFFFFF" />
-                  </TouchableOpacity>
-
                   {lesson.quiz && lesson.quiz.length > 0 && (
                     <TouchableOpacity
                       style={styles.actionButton}
@@ -1200,26 +1280,26 @@ export default function LessonExperience() {
             renderSkeleton()
           ) : (
             <>
-              {renderContent()}
+              {renderContentGroup()}
 
               <View style={styles.navigationButtons}>
                 <TouchableOpacity
                   style={[
                     styles.navButton,
-                    currentContentIndex === 0 && styles.navButtonDisabled
+                    currentGroupIndex === 0 && styles.navButtonDisabled
                   ]}
-                  onPress={() => navigateToContent(currentContentIndex - 1)}
-                  activeOpacity={currentContentIndex === 0 ? 0.5 : 0.7}
-                  disabled={currentContentIndex === 0}
+                  onPress={() => navigateToGroup(currentGroupIndex - 1)}
+                  activeOpacity={currentGroupIndex === 0 ? 0.5 : 0.7}
+                  disabled={currentGroupIndex === 0}
                 >
                   <Ionicons
                     name="arrow-back"
                     size={20}
-                    color={currentContentIndex === 0 ? "#8A8FA3" : "#FFFFFF"}
+                    color={currentGroupIndex === 0 ? "#8A8FA3" : "#FFFFFF"}
                   />
                   <Text style={[
                     styles.navButtonText,
-                    currentContentIndex === 0 && styles.navButtonTextDisabled
+                    currentGroupIndex === 0 && styles.navButtonTextDisabled
                   ]}>
                     Previous
                   </Text>
@@ -1230,11 +1310,11 @@ export default function LessonExperience() {
                     styles.navButton,
                     styles.navButtonNext
                   ]}
-                  onPress={() => navigateToContent(currentContentIndex + 1)}
+                  onPress={() => navigateToGroup(currentGroupIndex + 1)}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.navButtonText}>
-                    {currentContentIndex === (lesson?.contents.length || 0) - 1 && lesson?.quiz && lesson?.quiz.length > 0
+                    {currentGroupIndex === (lesson?.contentGroups.length || 0) - 1 && lesson?.quiz && lesson?.quiz.length > 0
                       ? 'Take Quiz'
                       : 'Next'
                     }
@@ -1324,29 +1404,123 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 12,
   },
-  actionButtonActive: {
-    backgroundColor: 'rgba(79, 120, 255, 0.5)',
-  },
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
-  contentContainer: {
+  contentGroupContainer: {
     marginBottom: 24,
+  },
+  groupHeader: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  groupTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  groupDescription: {
+    fontSize: 14,
+    color: '#B4C6EF',
+    lineHeight: 20,
+  },
+  groupContents: {
+    gap: 20,
+  },
+  contentItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   contentText: {
     fontSize: 16,
     lineHeight: 26,
     color: '#FFFFFF',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  contentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  textToSpeechButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(79, 120, 255, 0.1)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  textToSpeechButtonActive: {
+    backgroundColor: '#4F78FF',
+  },
+  textToSpeechText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#4F78FF',
+    marginLeft: 6,
+  },
+  textToSpeechTextActive: {
+    color: '#FFFFFF',
+  },
+  noteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  noteButtonActive: {
+    backgroundColor: 'rgba(79, 120, 255, 0.1)',
+  },
+  noteButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#B4C6EF',
+    marginLeft: 6,
+  },
+  noteButtonTextActive: {
+    color: '#4F78FF',
+  },
+  savedNoteContainer: {
+    backgroundColor: 'rgba(79, 120, 255, 0.05)',
+    borderRadius: 8,
+    padding: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#4F78FF',
+    marginTop: 12,
+  },
+  savedNoteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  savedNoteTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4F78FF',
+    marginLeft: 6,
+  },
+  savedNoteText: {
+    fontSize: 12,
+    color: '#B4C6EF',
+    lineHeight: 16,
   },
   imageContainer: {
     width: '100%',
-    height: 200,
-    borderRadius: 12,
+    height: 180,
+    borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginBottom: 16,
+    marginBottom: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1356,28 +1530,24 @@ const styles = StyleSheet.create({
   },
   latexContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
     alignItems: 'center',
   },
   codeContainer: {
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: 'hidden',
-    marginBottom: 16,
-  },
-  codeBlock: {
-    padding: 16,
-    borderRadius: 12,
+    marginBottom: 12,
   },
   linkContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
   },
   linkContent: {
     flexDirection: 'row',
@@ -1386,32 +1556,28 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   linkIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   linkTextContainer: {
     flex: 1,
   },
   linkTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   linkUrl: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#B4C6EF',
   },
   videoContainer: {
     width: '100%',
-    height: 220,
-    borderRadius: 12,
+    height: 200,
+    borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginBottom: 16,
-  },
-  video: {
-    width: '100%',
-    height: '100%',
+    marginBottom: 12,
   },
   videoLoading: {
     position: 'absolute',
@@ -1426,35 +1592,12 @@ const styles = StyleSheet.create({
   videoLoadingText: {
     color: '#B4C6EF',
     marginTop: 12,
-    fontSize: 14,
-  },
-  textToSpeechButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(79, 120, 255, 0.1)',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-  },
-  textToSpeechButtonActive: {
-    backgroundColor: '#4F78FF',
-  },
-  textToSpeechText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4F78FF',
-    marginLeft: 8,
-  },
-  textToSpeechTextActive: {
-    color: '#FFFFFF',
+    fontSize: 12,
   },
   navigationButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 16,
+    marginTop: 24,
     marginBottom: 40,
   },
   navButton: {
@@ -1482,6 +1625,7 @@ const styles = StyleSheet.create({
   navButtonTextDisabled: {
     color: '#8A8FA3',
   },
+  // Quiz styles (same as before)
   quizContainer: {
     position: 'absolute',
     top: 0,
@@ -1634,7 +1778,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: '#B4C6EF',
   },
-  quizFooter: {
+    quizFooter: {
     padding: 20,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
@@ -1644,7 +1788,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(79, 120, 255, 0.5)',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
   },
   quizSubmitButtonActive: {
@@ -1652,12 +1796,15 @@ const styles = StyleSheet.create({
   },
   quizSubmitButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#FFFFFF',
     marginRight: 8,
   },
+  buttonIcon: {
+    marginLeft: 4,
+  },
   quizResultsContainer: {
-    alignItems: 'center',
+    width: '100%',
   },
   quizScoreContainer: {
     alignItems: 'center',
@@ -1672,26 +1819,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-    marginTop: 12,
+    marginTop: 8,
   },
   quizActionButtons: {
-    flexDirection: 'column',
-    width: '100%',
-    gap: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
   },
   quizButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 12,
+    minWidth: 140,
   },
   quizRetryButton: {
-    backgroundColor: 'rgba(79, 120, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   quizRetryButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#4F78FF',
     marginRight: 8,
   },
@@ -1699,14 +1848,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#4F78FF',
   },
   quizFinishButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#FFFFFF',
     marginRight: 8,
   },
-  buttonIcon: {
-    marginTop: 1,
-  },
+  // Notes styles
   notesContainer: {
     position: 'absolute',
     top: 0,
@@ -1768,61 +1915,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  notesDeleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 94, 94, 0.1)',
+  },
+  notesDeleteButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FF5E5E',
+    marginLeft: 8,
+  },
   notesSaveButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#4F78FF',
-    paddingVertical: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 12,
+    minWidth: 140,
   },
   notesSaveButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#FFFFFF',
     marginRight: 8,
   },
-  notesDeleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 94, 94, 0.1)',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginRight: 12,
-  },
-  notesDeleteButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FF5E5E',
-    marginLeft: 8,
-  },
-  savedNoteContainer: {
-    backgroundColor: 'rgba(79, 120, 255, 0.05)',
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: '#4F78FF',
-    marginTop: 16,
-  },
-  savedNoteHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  savedNoteTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4F78FF',
-    marginLeft: 8,
-  },
-  savedNoteText: {
-    fontSize: 14,
-    color: '#B4C6EF',
-    lineHeight: 20,
-  },
+  // Delete confirmation styles
   deleteConfirmContainer: {
     position: 'absolute',
     top: 0,
@@ -1835,7 +1958,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(9, 14, 35, 0.8)',
   },
   deleteConfirmGradient: {
-    width: width * 0.85,
+    width: '80%',
+    maxWidth: 320,
     borderRadius: 16,
     overflow: 'hidden',
   },
@@ -1853,76 +1977,71 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   deleteConfirmText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#B4C6EF',
     textAlign: 'center',
     marginBottom: 24,
-    lineHeight: 24,
+    lineHeight: 20,
   },
   deleteConfirmButtons: {
     flexDirection: 'row',
+    justifyContent: 'center',
     width: '100%',
-    justifyContent: 'space-between',
+    gap: 16,
   },
   deleteConfirmCancelButton: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
-    marginRight: 12,
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   deleteConfirmCancelText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
   },
   deleteConfirmDeleteButton: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#FF5E5E',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#FF5E5E',
   },
   deleteConfirmDeleteText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  // Skeleton styles
   skeletonContainer: {
-    width: '100%',
+    marginBottom: 24,
   },
   skeletonHeader: {
     height: 28,
     width: '70%',
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   skeletonSubtitle: {
     height: 16,
-    width: '90%',
+    width: '50%',
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 30,
+    marginBottom: 24,
   },
   skeletonContentContainer: {
-    marginTop: 20,
+    gap: 16,
   },
   skeletonParagraph: {
     height: 100,
     width: '100%',
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 20,
   },
   skeletonImage: {
-    height: 200,
+    height: 180,
     width: '100%',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 20,
+    borderRadius: 8,
   },
 });
