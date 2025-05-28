@@ -90,7 +90,6 @@ export default function LessonExperience() {
   const [noteText, setNoteText] = useState('');
   const [showNotes, setShowNotes] = useState(false);
   const [savedNotes, setSavedNotes] = useState<{ [key: string]: string }>({});
-  const [contentProgress, setContentProgress] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -107,7 +106,7 @@ export default function LessonExperience() {
   const deleteConfirmPosition = useSharedValue(height);
 
   // Fetch lesson data
-  const fetchLessonData = async () => {
+  const fetchLessonData = React.useCallback(async () => {
     try {
       setIsLoading(true);
       const token = await SecureStore.getItemAsync('token');
@@ -148,7 +147,6 @@ export default function LessonExperience() {
       if (progress) {
         const progressIndex = parseInt(progress, 10);
         setCurrentContentIndex(progressIndex);
-        setContentProgress(progressIndex / (lessonData.contents.length - 1));
         progressValue.value = progressIndex / (lessonData.contents.length - 1);
       }
 
@@ -161,7 +159,7 @@ export default function LessonExperience() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [lessonId, router, toast, progressValue]);
 
   useEffect(() => {
     fetchLessonData();
@@ -172,7 +170,7 @@ export default function LessonExperience() {
         Speech.stop();
       }
     };
-  }, [lessonId]);
+  }, [lessonId, isSpeaking, fetchLessonData]);
 
   // Save progress when content index changes
   useEffect(() => {
@@ -182,13 +180,12 @@ export default function LessonExperience() {
 
         // Update progress bar
         const newProgress = currentContentIndex / (lesson.contents.length - 1);
-        setContentProgress(newProgress);
         progressValue.value = withTiming(newProgress, { duration: 300 });
       };
 
       saveProgress();
     }
-  }, [currentContentIndex, lesson]);
+  }, [currentContentIndex, lesson, lessonId, progressValue]);
 
   useEffect(() => {
     // Prevent screen capture on android
@@ -216,7 +213,7 @@ export default function LessonExperience() {
       }
     });
     return () => subscribe.remove();
-  }, []);
+  }, [toast, router]);
 
   const handleBackPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
