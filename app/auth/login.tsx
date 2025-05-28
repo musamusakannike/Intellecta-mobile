@@ -1,28 +1,30 @@
-import React, { useState, useContext, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
-  ActivityIndicator,
-  ScrollView,
-  Image,
-  Keyboard,
-  TouchableWithoutFeedback
-} from 'react-native';
+import { ForgotPasswordModal } from '@/components/ForgotPasswordModal';
+import { ToastContext } from "@/components/Toast/ToastContext";
+import { VerifyEmailModal } from '@/components/VerifyEmailModal';
+import { API_ROUTES } from '@/constants';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { makeRedirectUri, ResponseType } from 'expo-auth-session';
+import { useAuthRequest } from 'expo-auth-session/providers/google';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { ToastContext } from "@/components/Toast/ToastContext";
 import * as SecureStore from 'expo-secure-store';
-import { API_ROUTES } from '@/constants';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { VerifyEmailModal } from '@/components/VerifyEmailModal';
-import { ForgotPasswordModal } from '@/components/ForgotPasswordModal';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View
+} from 'react-native';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -123,6 +125,44 @@ export default function Login() {
   const handleForgotPassword = () => {
     setIsForgotPasswordModal(true);
   };
+
+  // Google Auth
+  const redirectUri = makeRedirectUri({
+    scheme: 'Intellecta',
+  });
+  const [request, response, promptAsync] = useAuthRequest({
+    clientId: '231107779970-1jgpt29dv8mm65k65gdiqdabvk5bd6on.apps.googleusercontent.com',
+    redirectUri,
+    responseType: ResponseType.IdToken,
+    scopes: ['profile', 'email', 'openid'],
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      if (id_token) {
+        // Send id_token to your backend to exchange for JWT
+        fetch(`${API_ROUTES.AUTH.LOGIN.replace('/login', '/google')}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token }),
+        })
+          .then(res => res.json())
+          .then(async data => {
+            if (data.token) {
+              await SecureStore.setItemAsync('token', data.token);
+              toast?.showToast({ type: 'success', message: 'Google login successful!' });
+              router.replace('/');
+            } else {
+              toast?.showToast({ type: 'error', message: data.message || 'Google login failed.' });
+            }
+          })
+          .catch(() => {
+            toast?.showToast({ type: 'error', message: 'Google login failed.' });
+          });
+      }
+    }
+  }, [response, router, toast]);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -258,9 +298,9 @@ export default function Login() {
               </View>
 
               <View style={styles.socialLogin}>
-                <TouchableOpacity style={styles.socialButton}>
-                  <Ionicons name="logo-google" size={20} color="#FFFFFF" />
-                  <Text style={styles.socialButtonText}>Google</Text>
+                <TouchableOpacity style={styles.socialButton} onPress={() => promptAsync()} disabled={!request}>
+                  <Ionicons name="logo-google" size={24} color="#4285F4" />
+                  <Text style={styles.socialButtonText}>Sign in with Google</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.socialButton}>
@@ -271,7 +311,7 @@ export default function Login() {
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Text style={styles.footerText}>Don&apos;t have an account? </Text>
               <TouchableOpacity onPress={handleSignUp}>
                 <Text style={styles.signUpText}>Sign Up</Text>
               </TouchableOpacity>

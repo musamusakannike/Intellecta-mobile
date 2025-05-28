@@ -1,26 +1,26 @@
-import React, { useState, useContext, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
-  ActivityIndicator,
-  ScrollView,
-  Image,
-  Keyboard,
-  TouchableWithoutFeedback
-} from 'react-native';
+import { ToastContext } from "@/components/Toast/ToastContext";
+import { API_ROUTES } from '@/constants';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { ToastContext } from "@/components/Toast/ToastContext";
 import * as SecureStore from 'expo-secure-store';
-import { API_ROUTES } from '@/constants';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View
+} from 'react-native';
 
 export default function Register() {
   const [username, setUsername] = useState('');
