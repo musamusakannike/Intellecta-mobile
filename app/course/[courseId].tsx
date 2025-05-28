@@ -47,12 +47,11 @@ interface Topic {
   __v: number
 }
 
-interface CourseDetails {
+interface ICourseDetails {
   _id: string
   title: string
   description: string
   category: string
-  price: number
   instructor: string
   coverImage?: string
   ratingStats: {
@@ -88,7 +87,7 @@ interface Review {
 export default function CourseDetails() {
   // State variables
   const [topics, setTopics] = useState<Topic[]>([])
-  const [courseDetails, setCourseDetails] = useState<CourseDetails | null>(null)
+  const [courseDetails, setCourseDetails] = useState<ICourseDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({})
@@ -132,7 +131,7 @@ export default function CourseDetails() {
   }, [])
 
   // Fetch course data
-  const fetchCourseData = async () => {
+  const fetchCourseData = React.useCallback(async () => {
     try {
       setIsLoading(true)
       const token = await SecureStore.getItemAsync("token")
@@ -188,72 +187,75 @@ export default function CourseDetails() {
       setIsLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [courseId, router, toast])
 
   // Fetch reviews
-  const fetchReviews = async (page = 1) => {
-    try {
-      setReviewsLoading(true)
-      const token = await SecureStore.getItemAsync("token")
+  const fetchReviews = React.useCallback(
+    async (page = 1) => {
+      try {
+        setReviewsLoading(true)
+        const token = await SecureStore.getItemAsync("token")
 
-      if (!token) {
-        router.replace("/auth/login")
-        return
-      }
-
-      const response = await fetch(
-        `${API_ROUTES.COURSES.GET_COURSE_BY_ID}/${courseId}/reviews?page=${page}&limit=5&sortBy=createdAt&sortOrder=desc`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Failed to fetch reviews")
-      }
-
-      const data = await response.json()
-
-      if (page === 1) {
-        setReviews(data.reviews)
-      } else {
-        setReviews((prev) => [...prev, ...data.reviews])
-      }
-
-      setReviewsPagination(data.pagination)
-
-      // Find user's review if it exists
-      if (userId) {
-        const userReviewFound = data.reviews.find((review: Review) => review.user._id === userId)
-        if (userReviewFound) {
-          setUserReview(userReviewFound)
+        if (!token) {
+          router.replace("/auth/login")
+          return
         }
+
+        const response = await fetch(
+          `${API_ROUTES.COURSES.GET_COURSE_BY_ID}/${courseId}/reviews?page=${page}&limit=5&sortBy=createdAt&sortOrder=desc`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.message || "Failed to fetch reviews")
+        }
+
+        const data = await response.json()
+
+        if (page === 1) {
+          setReviews(data.reviews)
+        } else {
+          setReviews((prev) => [...prev, ...data.reviews])
+        }
+
+        setReviewsPagination(data.pagination)
+
+        // Find user's review if it exists
+        if (userId) {
+          const userReviewFound = data.reviews.find((review: Review) => review.user._id === userId)
+          if (userReviewFound) {
+            setUserReview(userReviewFound)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching reviews:", error)
+        toast?.showToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to load reviews",
+        })
+      } finally {
+        setReviewsLoading(false)
       }
-    } catch (error) {
-      console.error("Error fetching reviews:", error)
-      toast?.showToast({
-        type: "error",
-        message: error instanceof Error ? error.message : "Failed to load reviews",
-      })
-    } finally {
-      setReviewsLoading(false)
-    }
-  }
+    },
+    [courseId, router, toast, userId]
+  )
 
   // Initial data fetch
   useEffect(() => {
     fetchCourseData()
-  }, [courseId])
+  }, [courseId, fetchCourseData])
 
   // Fetch reviews when showReviews changes
   useEffect(() => {
     if (showReviews) {
       fetchReviews()
     }
-  }, [showReviews, userId])
+  }, [showReviews, userId, fetchReviews])
 
   // Handle refresh
   const handleRefresh = () => {
@@ -496,10 +498,6 @@ export default function CourseDetails() {
                   <Ionicons name="time-outline" size={16} color="#B4C6EF" />
                   <Text style={styles.metaText}>{topics.length * 15} mins</Text>
                 </View>
-
-                <View style={styles.priceBadge}>
-                  <Text style={styles.priceText}>${courseDetails.price.toFixed(2)}</Text>
-                </View>
               </Animated.View>
             </View>
           )}
@@ -543,7 +541,7 @@ export default function CourseDetails() {
                   <View style={styles.emptyContainer}>
                     <Ionicons name="book-outline" size={60} color="#4F78FF" style={styles.emptyIcon} />
                     <Text style={styles.emptyTitle}>No topics available</Text>
-                    <Text style={styles.emptyText}>This course doesn't have any content yet</Text>
+                    <Text style={styles.emptyText}>This course doesn&apos;t have any content yet</Text>
                   </View>
                 ) : (
                   topics.map((topic, index) => (
@@ -772,17 +770,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#B4C6EF",
     marginLeft: 6,
-  },
-  priceBadge: {
-    backgroundColor: "rgba(79, 120, 255, 0.2)",
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-  },
-  priceText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#4F78FF",
   },
   scrollContent: {
     paddingTop: 220,

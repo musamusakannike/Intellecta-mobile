@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useNavigation } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+// import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ToastContext } from '@/components/Toast/ToastContext';
@@ -59,7 +59,7 @@ export default function PremiumManage() {
     };
 
     loadSubscriptionData();
-  }, []);
+  }, [toast]);
 
   // Format date
   const formatDate = (date: Date) => {
@@ -94,7 +94,7 @@ export default function PremiumManage() {
               setIsCancelling(true);
 
               // Get token for authorization
-              const token = await AsyncStorage.getItem('token');
+              // const token = await AsyncStorage.getItem('token');
 
               // In a real app, you would make an API call to cancel subscription
               // For example:

@@ -8,7 +8,6 @@ import {
   RefreshControl,
   StatusBar,
   SafeAreaView,
-  FlatList,
   Image,
   ActivityIndicator,
   Dimensions,
@@ -50,7 +49,7 @@ export default function FavoritesPage() {
       setIsLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [toast])
 
   // Initial load
   useEffect(() => {
@@ -153,9 +152,6 @@ export default function FavoritesPage() {
           <View style={styles.gridCardContent}>
             <Text style={styles.gridCardTitle} numberOfLines={2}>{course.title}</Text>
             <View style={styles.gridCardFooter}>
-              <Text style={styles.gridCardPrice}>
-                {course.price > 0 ? `$${course.price?.toFixed(2)}` : 'Free'}
-              </Text>
               <TouchableOpacity 
                 style={styles.gridFavoriteButton}
                 onPress={(e) => handleRemoveFromFavorites(course._id, e)}
@@ -391,11 +387,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-  },
-  gridCardPrice: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#4F78FF",
   },
   gridFavoriteButton: {
     padding: 6,

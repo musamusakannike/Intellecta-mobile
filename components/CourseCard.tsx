@@ -93,9 +93,6 @@ export const CourseCard = ({ course, onPress, style }: { course: any, onPress: a
         </Text>
 
         <View style={styles.footer}>
-          {/* <Text style={styles.price}>
-            {course.price > 0 ? `$${course.price?.toFixed(2)}` : 'Free'}
-          </Text> */}
 
           <View style={styles.rating}>
             <FontAwesome name="star" size={14} color="#FFD700" style={styles.ratingIcon} />
@@ -162,11 +159,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  price: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   rating: {
     flexDirection: 'row',
