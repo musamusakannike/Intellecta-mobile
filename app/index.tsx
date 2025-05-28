@@ -41,14 +41,11 @@ interface Course {
   _id: string
   title: string
   description: string
-  price: number
   category: string
   isFeatured: boolean
 }
 
 interface FilterState {
-  minPrice: string
-  maxPrice: string
   isFeatured: boolean
   sortBy: string
   sortOrder: string
@@ -307,8 +304,6 @@ export default function Dashboard() {
   const [filterModalVisible, setFilterModalVisible] = useState(false)
   const [notificationsModalVisible, setNotificationsModalVisible] = useState(false)
   const [filters, setFilters] = useState<FilterState>({
-    minPrice: "",
-    maxPrice: "",
     isFeatured: false,
     sortBy: "createdAt",
     sortOrder: "desc",
@@ -389,8 +384,6 @@ export default function Dashboard() {
 
         const appliedFilters: FilterState = resetFilters
           ? {
-            minPrice: "",
-            maxPrice: "",
             isFeatured: false,
             sortBy: "createdAt",
             sortOrder: "desc",
@@ -413,8 +406,6 @@ export default function Dashboard() {
         const params = new URLSearchParams()
         if (appliedFilters.search) params.append("search", appliedFilters.search)
         if (appliedFilters.category) params.append("category", appliedFilters.category)
-        if (appliedFilters.minPrice) params.append("minPrice", appliedFilters.minPrice)
-        if (appliedFilters.maxPrice) params.append("maxPrice", appliedFilters.maxPrice)
         if (appliedFilters.isFeatured) params.append("isFeatured", "true")
         if (appliedFilters.sortBy) params.append("sortBy", appliedFilters.sortBy)
         if (appliedFilters.sortOrder) params.append("sortOrder", appliedFilters.sortOrder)
@@ -472,8 +463,6 @@ export default function Dashboard() {
 
     // Count active filters
     let count = 0
-    if (newFilters.minPrice) count++
-    if (newFilters.maxPrice) count++
     if (newFilters.isFeatured) count++
     if (newFilters.sortBy !== "createdAt" || newFilters.sortOrder !== "desc") count++
     setActiveFilters(count)
@@ -484,8 +473,6 @@ export default function Dashboard() {
   // Reset filters
   const resetFilters = () => {
     const defaultFilters = {
-      minPrice: "",
-      maxPrice: "",
       isFeatured: false,
       sortBy: "createdAt",
       sortOrder: "desc",
@@ -591,7 +578,6 @@ export default function Dashboard() {
             <Skeleton style={styles.skeletonTitle} />
             <Skeleton style={styles.skeletonDescription} />
             <View style={styles.skeletonFooter}>
-              <Skeleton style={styles.skeletonPrice} />
               <Skeleton style={styles.skeletonRating} />
             </View>
           </View>
@@ -851,35 +837,6 @@ export default function Dashboard() {
 
               <ScrollView style={styles.filterContent}>
                 <View style={styles.filterSection}>
-                  <Text style={styles.filterSectionTitle}>Price Range</Text>
-                  <View style={styles.priceInputs}>
-                    <View style={styles.priceInputContainer}>
-                      <Text style={styles.priceInputLabel}>Min</Text>
-                      <TextInput
-                        style={styles.priceInput}
-                        placeholder="0"
-                        placeholderTextColor="#8A8FA3"
-                        keyboardType="numeric"
-                        value={filters.minPrice}
-                        onChangeText={(text) => setFilters({ ...filters, minPrice: text })}
-                      />
-                    </View>
-                    <View style={styles.priceInputDivider} />
-                    <View style={styles.priceInputContainer}>
-                      <Text style={styles.priceInputLabel}>Max</Text>
-                      <TextInput
-                        style={styles.priceInput}
-                        placeholder="1000"
-                        placeholderTextColor="#8A8FA3"
-                        keyboardType="numeric"
-                        value={filters.maxPrice}
-                        onChangeText={(text) => setFilters({ ...filters, maxPrice: text })}
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.filterSection}>
                   <Text style={styles.filterSectionTitle}>Featured Courses</Text>
                   <TouchableOpacity
                     style={styles.switchContainer}
@@ -903,14 +860,6 @@ export default function Dashboard() {
                         style={[styles.sortOptionText, filters.sortBy === "createdAt" && styles.sortOptionTextActive]}
                       >
                         Date
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.sortOption, filters.sortBy === "price" && styles.sortOptionActive]}
-                      onPress={() => setFilters({ ...filters, sortBy: "price" })}
-                    >
-                      <Text style={[styles.sortOptionText, filters.sortBy === "price" && styles.sortOptionTextActive]}>
-                        Price
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -1257,12 +1206,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  skeletonPrice: {
-    height: 18,
-    width: 80,
-    borderRadius: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-  },
   skeletonRating: {
     height: 18,
     width: 60,
@@ -1317,33 +1260,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#FFFFFF",
     marginBottom: 12,
-  },
-  priceInputs: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  priceInputContainer: {
-    flex: 1,
-  },
-  priceInputLabel: {
-    fontSize: 14,
-    color: "#B4C6EF",
-    marginBottom: 8,
-  },
-  priceInput: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#FFFFFF",
-    fontSize: 16,
-  },
-  priceInputDivider: {
-    width: 20,
-    height: 2,
-    backgroundColor: "#B4C6EF",
-    marginHorizontal: 12,
-    marginTop: 20,
   },
   switchContainer: {
     flexDirection: "row",
