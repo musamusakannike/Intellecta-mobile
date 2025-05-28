@@ -64,19 +64,24 @@ export const CourseCard = ({ course, onPress, style }: { course: any, onPress: a
           <View style={styles.categoryContainer}>
             <Text style={styles.category}>{course.categories?.[0] || course.category || 'General'}</Text>
           </View>
-
-          {/* Favorite Button - Moved inside content */}
-          <TouchableOpacity
-            style={styles.favoriteButton}
-            onPress={handleToggleFavorite}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={isFav ? "heart" : "heart-outline"}
-              size={22}
-              color={isFav ? "#FF5E5E" : "#FFFFFF"}
-            />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {/* {course.isFeatured && (
+              <View style={styles.featuredBadge}>
+                <Ionicons name="star" size={12} color="#FFFFFF" />
+              </View>
+            )} */}
+            <TouchableOpacity
+              style={styles.favoriteButton}
+              onPress={handleToggleFavorite}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isFav ? "heart" : "heart-outline"}
+                size={22}
+                color={isFav ? "#FF5E5E" : "#FFFFFF"}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Text style={styles.title} numberOfLines={1}>
@@ -88,9 +93,9 @@ export const CourseCard = ({ course, onPress, style }: { course: any, onPress: a
         </Text>
 
         <View style={styles.footer}>
-          <Text style={styles.price}>
+          {/* <Text style={styles.price}>
             {course.price > 0 ? `$${course.price?.toFixed(2)}` : 'Free'}
-          </Text>
+          </Text> */}
 
           <View style={styles.rating}>
             <FontAwesome name="star" size={14} color="#FFD700" style={styles.ratingIcon} />
@@ -100,12 +105,6 @@ export const CourseCard = ({ course, onPress, style }: { course: any, onPress: a
           </View>
         </View>
       </View>
-
-      {course.isFeatured && (
-        <View style={styles.featuredBadge}>
-          <Ionicons name="star" size={12} color="#FFFFFF" />
-        </View>
-      )}
     </TouchableOpacity>
   );
 };
