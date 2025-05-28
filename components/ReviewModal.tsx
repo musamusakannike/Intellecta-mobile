@@ -1,7 +1,4 @@
-"use client"
-
-import type React from "react"
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react";
 import {
     View,
     Text,
@@ -10,107 +7,115 @@ import {
     TextInput,
     ActivityIndicator,
     Animated,
-    Dimensions,
-    Platform,
     ScrollView,
-    KeyboardAvoidingView
-} from "react-native"
-import { Ionicons } from "@expo/vector-icons"
-import * as Haptics from "expo-haptics"
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 
 interface ReviewModalProps {
-    visible: boolean
-    onClose: () => void
-    onSubmit: (review: { rating: number; title: string; content: string }) => Promise<void>
+    visible: boolean;
+    onClose: () => void;
+    onSubmit: (review: { rating: number; title: string; content: string }) => Promise<void>;
     existingReview?: {
-        rating: number
-        title: string
-        content: string
-    }
-    isEditing?: boolean
+        rating: number;
+        title: string;
+        content: string;
+    };
+    isEditing?: boolean;
 }
 
-const { width } = Dimensions.get("window")
-
-const ReviewModal: React.FC<ReviewModalProps> = ({ visible, onClose, onSubmit, existingReview, isEditing = false }) => {
-    if (!visible) return null;
-
-    const [rating, setRating] = useState(existingReview?.rating || 0)
-    const [title, setTitle] = useState(existingReview?.title || "")
-    const [content, setContent] = useState(existingReview?.content || "")
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [error, setError] = useState("")
-    const [animatedValue] = useState(new Animated.Value(0))
+const ReviewModal: React.FC<ReviewModalProps> = ({
+    visible,
+    onClose,
+    onSubmit,
+    existingReview,
+    isEditing = false,
+}) => {
+    const [rating, setRating] = useState(existingReview?.rating || 0);
+    const [title, setTitle] = useState(existingReview?.title || "");
+    const [content, setContent] = useState(existingReview?.content || "");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState("");
+    const animatedValue = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        if (visible) {
-            setRating(existingReview?.rating || 0)
-            setTitle(existingReview?.title || "")
-            setContent(existingReview?.content || "")
-            setError("")
+        const animation = Animated.timing(animatedValue, {
+            toValue: visible ? 1 : 0,
+            duration: visible ? 300 : 200,
+            useNativeDriver: true,
+        });
 
-            Animated.timing(animatedValue, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-            }).start()
-        } else {
-            Animated.timing(animatedValue, {
-                toValue: 0,
-                duration: 200,
-                useNativeDriver: true,
-            }).start()
+        if (visible) {
+            setRating(existingReview?.rating || 0);
+            setTitle(existingReview?.title || "");
+            setContent(existingReview?.content || "");
+            setError("");
         }
-    }, [visible, existingReview])
+
+        animation.start();
+
+        return () => {
+            animation.stop();
+        };
+    }, [visible, existingReview, animatedValue]);
 
     const handleStarPress = (selectedRating: number) => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-        setRating(selectedRating)
-    }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setRating(selectedRating);
+    };
 
     const handleSubmit = async () => {
         if (rating === 0) {
-            setError("Please select a rating")
-            return
+            setError("Please select a rating");
+            return;
         }
 
         if (!title.trim()) {
-            setError("Please enter a review title")
-            return
+            setError("Please enter a review title");
+            return;
         }
 
         if (!content.trim()) {
-            setError("Please enter review content")
-            return
+            setError("Please enter review content");
+            return;
         }
 
         try {
-            setIsSubmitting(true)
-            setError("")
-            await onSubmit({ rating, title, content })
-            setIsSubmitting(false)
-            onClose()
+            setIsSubmitting(true);
+            setError("");
+            await onSubmit({ rating, title, content });
+            setIsSubmitting(false);
+            onClose();
         } catch (err) {
-            setIsSubmitting(false)
-            setError(err instanceof Error ? err.message : "Failed to submit review")
+            setIsSubmitting(false);
+            setError(err instanceof Error ? err.message : "Failed to submit review");
         }
-    }
+    };
 
     const modalTranslateY = animatedValue.interpolate({
         inputRange: [0, 1],
         outputRange: [300, 0],
-    })
+    });
 
-    const backdropOpacity = animatedValue.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 0.5],
-    })
+    if (!visible) {
+        return null;
+    }
 
     return (
         <View style={styles.modalOverlay}>
-            <View style={styles.modalContainer}>
+            <Animated.View
+                style={[
+                    styles.modalContainer,
+                    {
+                        transform: [{ translateY: modalTranslateY }],
+                        opacity: animatedValue,
+                    },
+                ]}
+            >
                 <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>{isEditing ? "Edit Review" : "Write a Review"}</Text>
+                    <Text style={styles.modalTitle}>
+                        {isEditing ? "Edit Review" : "Write a Review"}
+                    </Text>
                     <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
                         <Ionicons name="close" size={24} color="#FFFFFF" />
                     </TouchableOpacity>
@@ -121,7 +126,11 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ visible, onClose, onSubmit, e
                         <Text style={styles.ratingLabel}>Your Rating</Text>
                         <View style={styles.starsContainer}>
                             {[1, 2, 3, 4, 5].map((star) => (
-                                <TouchableOpacity key={star} onPress={() => handleStarPress(star)} style={styles.starButton}>
+                                <TouchableOpacity
+                                    key={star}
+                                    onPress={() => handleStarPress(star)}
+                                    style={styles.starButton}
+                                >
                                     <Ionicons
                                         name={rating >= star ? "star" : "star-outline"}
                                         size={32}
@@ -175,7 +184,10 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ visible, onClose, onSubmit, e
                     {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
                     <TouchableOpacity
-                        style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+                        style={[
+                            styles.submitButton,
+                            isSubmitting && styles.submitButtonDisabled,
+                        ]}
                         onPress={handleSubmit}
                         disabled={isSubmitting}
                         activeOpacity={0.8}
@@ -183,12 +195,16 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ visible, onClose, onSubmit, e
                         {isSubmitting ? (
                             <ActivityIndicator color="#FFFFFF" size="small" />
                         ) : (
-                            <Text style={styles.submitButtonText}>{isEditing ? "Update Review" : "Submit Review"}</Text>
+                            <Text style={styles.submitButtonText}>
+                                {isEditing ? "Update Review" : "Submit Review"}
+                            </Text>
                         )}
                     </TouchableOpacity>
-                </ScrollView></View></View>
-    )
-}
+                </ScrollView>
+            </Animated.View>
+        </View>
+    );
+};
 
 const styles = StyleSheet.create({
     modalOverlay: {
@@ -223,46 +239,6 @@ const styles = StyleSheet.create({
         color: "#FFFFFF",
     },
     modalCloseButton: {
-        padding: 4,
-    },
-    container: {
-        flex: 1,
-        justifyContent: "flex-end",
-    },
-    backdrop: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "#000000",
-    },
-    modalContent: {
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        overflow: "hidden",
-        maxHeight: "80%",
-    },
-    modalGradient: {
-        width: "100%",
-        paddingBottom: Platform.OS === "ios" ? 40 : 20,
-    },
-    header: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: "rgba(255, 255, 255, 0.1)",
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: "bold",
-        color: "#FFFFFF",
-    },
-    closeButton: {
         padding: 4,
     },
     scrollContent: {
@@ -344,6 +320,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "600",
     },
-})
+});
 
-export default ReviewModal
+export default ReviewModal;
